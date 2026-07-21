@@ -1,5 +1,10 @@
 # Claude Usage — menu bar app + desktop widget
 
+[![Downloads](https://img.shields.io/github/downloads/jpuritz/ClaudeUsageBar/total?label=downloads&color=brightgreen)](https://github.com/jpuritz/ClaudeUsageBar/releases)
+[![Latest release](https://img.shields.io/github/v/release/jpuritz/ClaudeUsageBar)](https://github.com/jpuritz/ClaudeUsageBar/releases/latest)
+[![License](https://img.shields.io/github/license/jpuritz/ClaudeUsageBar)](LICENSE)
+![macOS 14+](https://img.shields.io/badge/macOS-14%2B-lightgrey)
+
 A native macOS app that shows your Claude usage limits (the same data as Claude
 Code's `/usage`) in three places:
 
