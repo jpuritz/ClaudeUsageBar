@@ -1,6 +1,10 @@
 #!/bin/bash
 # Builds Claude Usage.app with just Command Line Tools (no Xcode needed)
 # and installs it to ~/Applications.
+#
+# This build has NO WidgetKit widget — that needs Xcode and a signed App Group
+# entitlement (see build-widget.sh). Menu bar and usage window work fully; the
+# app simply has no widget to publish snapshots to.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -9,9 +13,10 @@ APP="build/Claude Usage.app"
 
 echo "Compiling…"
 mkdir -p build
+# Shared/ holds the model + formatting used by both the app and the widget.
 swiftc -O -parse-as-library \
-    -target "${ARCH}-apple-macos13.0" \
-    Sources/*.swift \
+    -target "${ARCH}-apple-macos14.0" \
+    Sources/*.swift Shared/*.swift \
     -o build/ClaudeUsage
 
 echo "Assembling bundle…"
@@ -42,3 +47,12 @@ rm -rf ~/Applications/"Claude Usage.app"
 cp -R "$APP" ~/Applications/
 
 echo "Done: ~/Applications/Claude Usage.app"
+
+# Package for distribution when asked: ./build.sh --package
+if [ "${1:-}" = "--package" ]; then
+    ZIP="build/ClaudeUsage-menubar.zip"
+    rm -f "$ZIP"
+    # ditto preserves the bundle's signature and metadata; `zip` does not.
+    ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+    echo "Packaged: $ZIP"
+fi

@@ -40,20 +40,26 @@ struct UsagePanelView: View {
     /// The window puts the name in its title bar, so it hides this one.
     var showsTitle: Bool = true
 
+    @ViewBuilder private var subscriptionBadge: some View {
+        if let sub = model.subscription, !sub.isEmpty {
+            Text(sub.capitalized)
+                .font(.system(size: 10, weight: .semibold))
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Capsule().fill(Color.primary.opacity(0.12)))
+                .foregroundStyle(.secondary)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                if showsTitle {
+            // Without the title there's nothing to balance the badge against, so
+            // the whole row is dropped and the badge moves to the footer.
+            if showsTitle {
+                HStack {
                     Text("Claude Usage")
                         .font(.system(size: 12, weight: .bold))
-                }
-                Spacer()
-                if let sub = model.subscription, !sub.isEmpty {
-                    Text(sub.capitalized)
-                        .font(.system(size: 10, weight: .semibold))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Capsule().fill(Color.primary.opacity(0.12)))
-                        .foregroundStyle(.secondary)
+                    Spacer()
+                    subscriptionBadge
                 }
             }
             if model.limits.isEmpty && model.errorMessage == nil {
@@ -70,10 +76,16 @@ struct UsagePanelView: View {
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let updated = model.lastUpdated {
-                Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
+            HStack(alignment: .center) {
+                if let updated = model.lastUpdated {
+                    Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                }
+                if !showsTitle {
+                    Spacer()
+                    subscriptionBadge
+                }
             }
         }
         .padding(compact ? 12 : 14)

@@ -93,10 +93,37 @@ The Keychain's `expiresAt` is a Unix timestamp — most tooling renders it in
 **local** time. Print both zones when comparing against expiry, or you'll chase
 failures that haven't happened yet.
 
-## First launch
+## Install
+
+### Download (menu bar + window, no widget)
+
+Grab `ClaudeUsage-menubar.zip` from the
+[latest release](https://github.com/jpuritz/ClaudeUsageBar/releases/latest),
+unzip, and drag **Claude Usage.app** to `/Applications`.
+
+It's **ad-hoc signed**, so macOS quarantines it on first open. Clear that once:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Claude Usage.app"
+```
+
+(Or open it via right-click ▸ Open, then System Settings ▸ Privacy & Security ▸
+*Open Anyway*.)
+
+**Why the download has no widget, and why it isn't properly signed:** shipping
+the WidgetKit widget requires an App Group entitlement, which requires a
+provisioning profile from a paid Apple Developer account ($99/yr) — a free
+Personal Team certificate is development-only and won't launch on anyone else's
+Mac. Distributing without Gatekeeper warnings needs a Developer ID certificate
+from that same paid account. Neither is something this project has, so: the
+download is the menu-bar build, and **the widget means building from source**
+(free, but needs Xcode). See [Building](#building).
+
+### First launch
 
 macOS will ask: *"ClaudeUsage wants to use your confidential information stored
-in 'Claude Code-credentials'"* — click **Always Allow**.
+in 'Claude Code-credentials'"* — click **Always Allow**. The app reads that
+token to call the usage endpoint; denying it leaves the app with nothing to show.
 
 ## Menu options
 
@@ -120,28 +147,56 @@ Two build paths, depending on whether you want the WidgetKit widget.
 ### With the widget (recommended) — needs Xcode
 
 ```sh
-./build-widget.sh    # builds app + widget, installs to /Applications
+brew install xcodegen
+./build-widget.sh          # builds app + widget, installs to /Applications
 ```
 
-Requirements:
+First time only, before that script will succeed:
 
-- **Xcode** (not just Command Line Tools) and **XcodeGen** (`brew install xcodegen`).
-- **An Apple ID signed into Xcode** (Settings ▸ Accounts). A *free* Apple ID is
-  enough — no paid developer account. The first time, open `ClaudeUsage.xcodeproj`
-  and pick your Team under Signing & Capabilities for **both** targets; Xcode
-  creates the certificate then. After that the script is fully command-line.
+1. Install **Xcode** (not just Command Line Tools) and point the tools at it:
+   `sudo xcode-select -s /Applications/Xcode.app`
+2. **Xcode ▸ Settings ▸ Accounts ▸ "+" ▸ Apple ID** and sign in. A *free* Apple ID
+   works — no paid developer account.
+3. Generate and open the project, then pick your Team:
+   ```sh
+   xcodegen generate && open ClaudeUsage.xcodeproj
+   ```
+   Select the **ClaudeUsage** target ▸ Signing & Capabilities ▸ **Team**, then do
+   the same for the **ClaudeUsageWidget** target. Xcode creates your development
+   certificate at that moment.
+4. Run `./build-widget.sh`. From here on it's fully command-line — it finds your
+   team automatically.
 
-Why signing is mandatory here: the app and the widget are separate processes that
-share data through an **App Group**, and that entitlement cannot be ad-hoc signed.
+Then add the widget: right-click the desktop ▸ **Edit Widgets** ▸ search
+"Claude Usage" ▸ drag out the size you want.
+
+**Why the Apple ID is required:** the app and widget are separate processes that
+share data through an **App Group**, and that entitlement can't be ad-hoc signed.
+
+**Troubleshooting**
+
+- *"has entitlements that require signing with a development certificate"* — no
+  Team selected yet; do step 3.
+- *"invalid or unsupported format for signature"* — stale build artifacts. Run
+  `rm -rf build/dd` and rebuild.
+- *Widget doesn't appear in the gallery* — it's registered from the installed
+  copy, so the app must be in `/Applications`. Confirm with:
+  `pluginkit -mv -p com.apple.widgetkit-extension | grep claude`
 
 The Xcode project is generated from [`project.yml`](project.yml) by XcodeGen, so
 edit that rather than the `.xcodeproj` (which is gitignored).
 
 ### Without the widget — Command Line Tools only
 
+No Xcode, no Apple ID. Menu bar and usage window work fully; there's just no
+widget.
+
 ```sh
-./build.sh    # ad-hoc signed, installs to ~/Applications, no widget
+./build.sh              # ad-hoc signed, installs to ~/Applications
+./build.sh --package    # …and also produces build/ClaudeUsage-menubar.zip
 ```
+
+This is what the published release contains.
 
 ## Architecture
 
