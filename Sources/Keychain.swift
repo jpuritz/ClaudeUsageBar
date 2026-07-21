@@ -1,0 +1,143 @@
+import Foundation
+import Security
+
+struct OAuthCredentials {
+    let accessToken: String
+    let refreshToken: String?
+    let expiresAt: Date?
+    let subscriptionType: String?
+}
+
+enum KeychainError: Error, LocalizedError {
+    case notFound
+    case accessDenied
+    case unreadable(OSStatus)
+    case badFormat
+
+    var errorDescription: String? {
+        switch self {
+        case .notFound:
+            return "No Claude Code credentials found. Sign in with the Claude Code CLI first."
+        case .accessDenied:
+            return "Keychain access denied. Relaunch and click “Always Allow”."
+        case .unreadable(let status):
+            return "Keychain error (\(status))."
+        case .badFormat:
+            return "Credentials found but in an unexpected format."
+        }
+    }
+}
+
+enum KeychainReader {
+    /// Optional user-provided long-lived token, stored under "ClaudeUsage-token".
+    static func readCustomToken() -> String? {
+        guard let data = readData(service: "ClaudeUsage-token"),
+              let token = String(data: data, encoding: .utf8)?
+                  .trimmingCharacters(in: .whitespacesAndNewlines),
+              !token.isEmpty
+        else { return nil }
+        return token
+    }
+
+    /// Reads (read-only) the OAuth credentials Claude Code stores under
+    /// "Claude Code-credentials". This app never writes to that item.
+    static func readClaudeCredentials() throws -> OAuthCredentials {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "Claude Code-credentials",
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnData as String: true,
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        switch status {
+        case errSecSuccess: break
+        case errSecItemNotFound: throw KeychainError.notFound
+        case errSecUserCanceled, errSecAuthFailed, errSecInteractionNotAllowed:
+            throw KeychainError.accessDenied
+        default: throw KeychainError.unreadable(status)
+        }
+        guard let data = item as? Data,
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let oauth = root["claudeAiOauth"] as? [String: Any],
+              let token = oauth["accessToken"] as? String
+        else { throw KeychainError.badFormat }
+
+        var expires: Date?
+        if let ms = oauth["expiresAt"] as? Double {
+            expires = Date(timeIntervalSince1970: ms / 1000.0)
+        }
+        return OAuthCredentials(
+            accessToken: token,
+            refreshToken: oauth["refreshToken"] as? String,
+            expiresAt: expires,
+            subscriptionType: oauth["subscriptionType"] as? String
+        )
+    }
+
+    // MARK: - App-private session store ("ClaudeUsage-session")
+    //
+    // Holds refreshed tokens the app mints itself. Completely separate from the
+    // Claude Code credential item, which this app only ever reads.
+
+    static func readSession() -> OAuthCredentials? {
+        guard let data = readData(service: "ClaudeUsage-session"),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let access = obj["accessToken"] as? String
+        else { return nil }
+        var expires: Date?
+        if let t = obj["expiresAt"] as? Double { expires = Date(timeIntervalSince1970: t) }
+        return OAuthCredentials(
+            accessToken: access,
+            refreshToken: obj["refreshToken"] as? String,
+            expiresAt: expires,
+            subscriptionType: nil
+        )
+    }
+
+    static func writeSession(accessToken: String, refreshToken: String?, expiresAt: Date) {
+        var obj: [String: Any] = [
+            "accessToken": accessToken,
+            "expiresAt": expiresAt.timeIntervalSince1970,
+        ]
+        if let refreshToken { obj["refreshToken"] = refreshToken }
+        guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
+        writeData(data, service: "ClaudeUsage-session")
+    }
+
+    static func clearSession() {
+        SecItemDelete([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "ClaudeUsage-session",
+        ] as CFDictionary)
+    }
+
+    // MARK: - Generic helpers (own items only)
+
+    private static func readData(service: String) -> Data? {
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnData as String: true,
+        ] as CFDictionary, &item)
+        return status == errSecSuccess ? item as? Data : nil
+    }
+
+    private static func writeData(_ data: Data, service: String) {
+        let base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+        ]
+        let updated = SecItemUpdate(
+            base as CFDictionary, [kSecValueData as String: data] as CFDictionary
+        )
+        if updated == errSecItemNotFound {
+            var add = base
+            add[kSecValueData as String] = data
+            add[kSecAttrAccount as String] = "claude-usage"
+            SecItemAdd(add as CFDictionary, nil)
+        }
+    }
+}

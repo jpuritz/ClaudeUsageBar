@@ -1,0 +1,221 @@
+import AppKit
+import SwiftUI
+import Combine
+import ServiceManagement
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    private var statusItem: NSStatusItem!
+    private let model = UsageModel()
+    private var widgetController: WidgetWindowController!
+    private var timer: Timer?
+    private var cancellable: AnyCancellable?
+    private let menu = NSMenu()
+
+    private static let widgetVisibleKey = "ShowDesktopWidget"
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.button?.imagePosition = .imageLeading
+        menu.delegate = self
+        statusItem.menu = menu
+        updateStatusButton()
+
+        NotificationManager.shared.setup()
+
+        widgetController = WidgetWindowController(model: model)
+        if UserDefaults.standard.object(forKey: Self.widgetVisibleKey) as? Bool ?? true {
+            widgetController.show()
+        }
+
+        cancellable = model.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { self?.updateStatusButton() }
+            }
+
+        model.refresh()
+        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.model.refresh() }
+        }
+    }
+
+    // MARK: - Menu bar button
+
+    private func updateStatusButton() {
+        guard let button = statusItem.button else { return }
+        if let shown = model.menuBarUtilization {
+            button.image = Self.ringImage(fraction: shown / 100.0)
+            button.attributedTitle = NSAttributedString(
+                string: " \(UsageFormat.percent(shown))",
+                attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)]
+            )
+            button.toolTip = model.limits
+                .map { "\($0.label): \(UsageFormat.percent($0.utilization))" }
+                .joined(separator: "\n")
+        } else {
+            button.image = Self.ringImage(fraction: 0)
+            button.attributedTitle = NSAttributedString(
+                string: " –",
+                attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)]
+            )
+            button.toolTip = model.errorMessage
+        }
+    }
+
+    /// Small progress ring, colored by severity.
+    private static func ringImage(fraction: Double) -> NSImage {
+        let side: CGFloat = 16
+        return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            let lineWidth: CGFloat = 2.5
+            let r = rect.insetBy(dx: lineWidth / 2 + 0.5, dy: lineWidth / 2 + 0.5)
+            let center = NSPoint(x: rect.midX, y: rect.midY)
+            let radius = r.width / 2
+
+            let track = NSBezierPath()
+            track.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
+            track.lineWidth = lineWidth
+            NSColor.secondaryLabelColor.withAlphaComponent(0.35).setStroke()
+            track.stroke()
+
+            if fraction > 0.005 {
+                let color: NSColor
+                switch fraction * 100 {
+                case ..<50: color = NSColor.systemGreen
+                case ..<75: color = NSColor.systemYellow
+                case ..<90: color = NSColor.systemOrange
+                default: color = NSColor.systemRed
+                }
+                let arc = NSBezierPath()
+                // Start at 12 o'clock, sweep clockwise.
+                arc.appendArc(
+                    withCenter: center, radius: radius,
+                    startAngle: 90, endAngle: 90 - 360 * min(fraction, 1.0),
+                    clockwise: true
+                )
+                arc.lineWidth = lineWidth
+                arc.lineCapStyle = .round
+                color.setStroke()
+                arc.stroke()
+            }
+            return true
+        }
+    }
+
+    // MARK: - Menu
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        // Note: no refresh here — a Keychain prompt triggered while the menu is
+        // open can't receive keyboard input (menu tracking captures key events).
+        menu.removeAllItems()
+
+        let panelItem = NSMenuItem()
+        let hosting = NSHostingView(rootView: UsagePanelView(model: model))
+        let size = hosting.fittingSize
+        hosting.frame = NSRect(x: 0, y: 0, width: max(264, size.width), height: size.height)
+        panelItem.view = hosting
+        menu.addItem(panelItem)
+
+        menu.addItem(.separator())
+
+        let refresh = NSMenuItem(title: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r")
+        refresh.target = self
+        menu.addItem(refresh)
+
+        let widgetToggle = NSMenuItem(
+            title: "Show Desktop Widget",
+            action: #selector(toggleWidget), keyEquivalent: "w"
+        )
+        widgetToggle.target = self
+        widgetToggle.state = widgetController.isVisible ? .on : .off
+        menu.addItem(widgetToggle)
+
+        let notifMenu = NSMenu()
+        let notifItem = NSMenuItem(title: "Notifications", action: nil, keyEquivalent: "")
+        notifItem.submenu = notifMenu
+        for (title, key) in [
+            ("Alert at 80% and 95%", "thresholds"),
+            ("Alert When Limits Reset", "resets"),
+            ("Usage Pace Warnings", "pace"),
+        ] {
+            let item = NSMenuItem(title: title, action: #selector(toggleNotifPref(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = key
+            item.state = Self.notifPref(key) ? .on : .off
+            notifMenu.addItem(item)
+        }
+        menu.addItem(notifItem)
+
+        let login = NSMenuItem(
+            title: "Launch at Login",
+            action: #selector(toggleLaunchAtLogin), keyEquivalent: ""
+        )
+        login.target = self
+        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        menu.addItem(login)
+
+        menu.addItem(.separator())
+
+        let quit = NSMenuItem(title: "Quit Claude Usage", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(quit)
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        // Refresh after the menu closes so any Keychain prompt is typeable.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.model.refreshIfStale(seconds: 60)
+        }
+    }
+
+    private static func notifPref(_ key: String) -> Bool {
+        switch key {
+        case "thresholds": return Prefs.notifyThresholds
+        case "resets": return Prefs.notifyResets
+        default: return Prefs.notifyPace
+        }
+    }
+
+    @objc private func toggleNotifPref(_ sender: NSMenuItem) {
+        guard let key = sender.representedObject as? String else { return }
+        switch key {
+        case "thresholds": Prefs.notifyThresholds.toggle()
+        case "resets":
+            Prefs.notifyResets.toggle()
+            if !Prefs.notifyResets {
+                NotificationManager.shared.cancel(
+                    ids: model.limits.map { "resetsched-\($0.id)" }
+                )
+            }
+        default: Prefs.notifyPace.toggle()
+        }
+    }
+
+    @objc private func refreshNow() {
+        model.refresh(force: true)
+    }
+
+    @objc private func toggleWidget() {
+        if widgetController.isVisible {
+            widgetController.hide()
+            UserDefaults.standard.set(false, forKey: Self.widgetVisibleKey)
+        } else {
+            widgetController.show()
+            UserDefaults.standard.set(true, forKey: Self.widgetVisibleKey)
+        }
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+            } else {
+                try SMAppService.mainApp.register()
+            }
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Couldn’t change Launch at Login"
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
+        }
+    }
+}
