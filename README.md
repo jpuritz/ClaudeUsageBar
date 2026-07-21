@@ -1,13 +1,14 @@
-# Claude Usage — menu bar + desktop widget
+# Claude Usage — menu bar app + desktop widget
 
-A tiny native macOS app that shows your Claude usage limits (the same data as
-Claude Code's `/usage`) in two places:
+A native macOS app that shows your Claude usage limits (the same data as Claude
+Code's `/usage`) in three places:
 
 - **Menu bar**: a colored progress ring + your 5-hour session limit percentage.
-  Click it for per-limit bars (session window, weekly limits), reset countdowns,
-  and controls.
-- **Desktop widget**: a frosted-glass panel pinned at desktop level (under normal
-  windows, visible with the desktop). Drag it anywhere; its position is remembered.
+  Click it for per-limit bars, reset countdowns, and controls.
+- **Desktop widget**: a real WidgetKit widget in the system widget gallery
+  (small / medium / large). Right-click the desktop ▸ Edit Widgets ▸ "Claude Usage".
+- **Usage window**: a standard titled window with the full breakdown — resizable,
+  remembers its frame, optionally floats on top. Toggle it from the menu (⌘W).
 
 Requires an active Claude subscription and the Claude Code CLI, signed in.
 
@@ -81,13 +82,13 @@ failures that haven't happened yet.
 ## First launch
 
 macOS will ask: *"ClaudeUsage wants to use your confidential information stored
-in 'Claude Code-credentials'"* — click **Always Allow**. (Rebuilding the app
-re-triggers this prompt because the ad-hoc code signature changes.)
+in 'Claude Code-credentials'"* — click **Always Allow**.
 
 ## Menu options
 
 - **Refresh Now** (⌘R while menu open)
-- **Show Desktop Widget** — toggle the desktop panel
+- **Usage Window** (⌘W) — show/hide the detail window
+- **Keep Window on Top** — pin that window above other apps
 - **Notifications** submenu:
   - *Alert at 80% and 95%* — banner when a limit crosses those thresholds
   - *Alert When Limits Reset* — scheduled for the reset time of any limit ≥ 60%,
@@ -100,17 +101,61 @@ re-triggers this prompt because the ad-hoc code signature changes.)
 
 ## Building
 
-Requires only Command Line Tools (no Xcode):
+Two build paths, depending on whether you want the WidgetKit widget.
+
+### With the widget (recommended) — needs Xcode
 
 ```sh
-./build.sh    # compiles, signs ad-hoc, installs to ~/Applications
+./build-widget.sh    # builds app + widget, installs to /Applications
 ```
+
+Requirements:
+
+- **Xcode** (not just Command Line Tools) and **XcodeGen** (`brew install xcodegen`).
+- **An Apple ID signed into Xcode** (Settings ▸ Accounts). A *free* Apple ID is
+  enough — no paid developer account. The first time, open `ClaudeUsage.xcodeproj`
+  and pick your Team under Signing & Capabilities for **both** targets; Xcode
+  creates the certificate then. After that the script is fully command-line.
+
+Why signing is mandatory here: the app and the widget are separate processes that
+share data through an **App Group**, and that entitlement cannot be ad-hoc signed.
+
+The Xcode project is generated from [`project.yml`](project.yml) by XcodeGen, so
+edit that rather than the `.xcodeproj` (which is gitignored).
+
+### Without the widget — Command Line Tools only
+
+```sh
+./build.sh    # ad-hoc signed, installs to ~/Applications, no widget
+```
+
+## Architecture
+
+```
+Sources/   host app (menu bar, window, fetching, notifications)
+Widget/    WidgetKit extension
+Shared/    model + formatting compiled into BOTH targets
+Config/    Info.plists and entitlements
+```
+
+The host app is deliberately **not sandboxed** — it reads the Claude Code
+Keychain item and spawns the `claude` CLI, neither of which a sandboxed process
+can do. Widget extensions, by contrast, *must* be sandboxed. So they can't share
+memory or arbitrary files: the app writes a JSON snapshot into the shared App
+Group container and calls `WidgetCenter.reloadAllTimelines()`, and the widget
+only ever reads that snapshot. The widget never touches your credentials.
+
+Because the app pushes reloads on every poll, the widget tracks the ~1 minute
+refresh rather than WidgetKit's lazy default schedule. macOS may still throttle
+reloads, so every view shows an "updated Xm ago" stamp rather than implying the
+number is live.
 
 ## Notes
 
-- The "desktop widget" is a borderless panel at desktop-icon window level —
-  it behaves like a widget but isn't a WidgetKit widget, so it won't appear in
-  the system widget gallery. A true WidgetKit widget requires full Xcode to
-  build; if you install Xcode later, this could be converted.
 - Colors: green < 50 %, yellow < 75 %, orange < 90 %, red ≥ 90 %.
-- The menu bar percentage is the *highest* utilization across all limits.
+- The menu bar and widget headline show the **5-hour session** limit (the one
+  that bites mid-session), falling back to the highest limit if absent. The menu,
+  window, and medium/large widgets list every limit.
+- Installing to `/Applications` matters for the widget build: macOS registers
+  widget extensions from a stable location. If you previously used `build.sh`,
+  delete the old `~/Applications/Claude Usage.app` so you don't run both.

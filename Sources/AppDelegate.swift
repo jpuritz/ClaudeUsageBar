@@ -7,12 +7,12 @@ import ServiceManagement
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private let model = UsageModel()
-    private var widgetController: WidgetWindowController!
+    private var usageWindow: UsageWindowController!
     private var timer: Timer?
     private var cancellable: AnyCancellable?
     private let menu = NSMenu()
 
-    private static let widgetVisibleKey = "ShowDesktopWidget"
+    private static let windowVisibleKey = "ShowUsageWindow"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -23,9 +23,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         NotificationManager.shared.setup()
 
-        widgetController = WidgetWindowController(model: model)
-        if UserDefaults.standard.object(forKey: Self.widgetVisibleKey) as? Bool ?? true {
-            widgetController.show()
+        usageWindow = UsageWindowController(model: model)
+        // Closing the window is a visibility change too — persist it so the
+        // window doesn't reappear on next launch after being closed.
+        usageWindow.onVisibilityChange = { [weak self] in
+            guard let self else { return }
+            UserDefaults.standard.set(self.usageWindow.isVisible, forKey: Self.windowVisibleKey)
+        }
+        // Default to closed now that the widget covers at-a-glance viewing.
+        if UserDefaults.standard.object(forKey: Self.windowVisibleKey) as? Bool ?? false {
+            usageWindow.show()
         }
 
         cancellable = model.objectWillChange
@@ -123,12 +130,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(refresh)
 
         let widgetToggle = NSMenuItem(
-            title: "Show Desktop Widget",
-            action: #selector(toggleWidget), keyEquivalent: "w"
+            title: "Usage Window",
+            action: #selector(toggleWindow), keyEquivalent: "w"
         )
         widgetToggle.target = self
-        widgetToggle.state = widgetController.isVisible ? .on : .off
+        widgetToggle.state = usageWindow.isVisible ? .on : .off
         menu.addItem(widgetToggle)
+
+        let floatItem = NSMenuItem(
+            title: "Keep Window on Top",
+            action: #selector(toggleFloat), keyEquivalent: ""
+        )
+        floatItem.target = self
+        floatItem.state = UsageWindowController.floats ? .on : .off
+        menu.addItem(floatItem)
 
         let notifMenu = NSMenu()
         let notifItem = NSMenuItem(title: "Notifications", action: nil, keyEquivalent: "")
@@ -194,14 +209,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model.refresh(force: true)
     }
 
-    @objc private func toggleWidget() {
-        if widgetController.isVisible {
-            widgetController.hide()
-            UserDefaults.standard.set(false, forKey: Self.widgetVisibleKey)
-        } else {
-            widgetController.show()
-            UserDefaults.standard.set(true, forKey: Self.widgetVisibleKey)
-        }
+    @objc private func toggleWindow() {
+        usageWindow.toggle()
+        UserDefaults.standard.set(usageWindow.isVisible, forKey: Self.windowVisibleKey)
+    }
+
+    @objc private func toggleFloat() {
+        UsageWindowController.floats.toggle()
+        usageWindow.applyFloating(UsageWindowController.floats)
     }
 
     @objc private func toggleLaunchAtLogin() {

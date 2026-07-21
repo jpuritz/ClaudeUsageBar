@@ -1,13 +1,6 @@
 import Foundation
 import Combine
-
-struct UsageLimit: Identifiable {
-    let id: String
-    let label: String
-    /// Percent, 0–100.
-    let utilization: Double
-    let resetsAt: Date?
-}
+import WidgetKit
 
 @MainActor
 final class UsageModel: ObservableObject {
@@ -38,6 +31,16 @@ final class UsageModel: ObservableObject {
             await self.fetch()
             self.inFlight = false
         }
+    }
+
+    /// Hands fresh data to the widget extension. The widget is sandboxed and
+    /// can't fetch or reach the Keychain itself, so the app writes a snapshot to
+    /// the shared App Group container and asks WidgetKit to reload.
+    private func publishToWidget(_ limits: [UsageLimit]) {
+        SharedStore.write(UsageSnapshot(
+            limits: limits, updated: Date(), subscription: subscription
+        ))
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     /// Refresh only if the data is older than `seconds` (used on menu close).
@@ -208,6 +211,7 @@ final class UsageModel: ObservableObject {
                 consecutive429s = 0
                 nextAttemptAllowed = .distantPast
                 AlertEngine.shared.evaluate(previous: previous, current: parsed)
+                publishToWidget(parsed)
             }
         case 401, 403:
             if usingCustomToken {
@@ -373,27 +377,5 @@ final class UsageModel: ObservableObject {
         if let d = f.date(from: s) { return d }
         f.formatOptions = [.withInternetDateTime]
         return f.date(from: s)
-    }
-}
-
-// MARK: - Display helpers
-
-enum UsageFormat {
-    static func percent(_ v: Double) -> String {
-        String(format: "%.0f%%", v.rounded())
-    }
-
-    static func resetString(_ date: Date?) -> String {
-        guard let date else { return "" }
-        let interval = date.timeIntervalSinceNow
-        if interval <= 0 { return "resetting…" }
-        if interval < 36 * 3600 {
-            let h = Int(interval) / 3600
-            let m = (Int(interval) % 3600) / 60
-            return h > 0 ? "resets in \(h)h \(m)m" : "resets in \(m)m"
-        }
-        let f = DateFormatter()
-        f.dateFormat = "EEE h a"
-        return "resets \(f.string(from: date))"
     }
 }

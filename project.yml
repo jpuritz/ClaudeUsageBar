@@ -1,0 +1,57 @@
+name: ClaudeUsage
+options:
+  bundleIdPrefix: com.jpuritz
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    MARKETING_VERSION: "1.1"
+    CURRENT_PROJECT_VERSION: "2"
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    # Set by build-widget.sh from your Xcode account, or export DEVELOPMENT_TEAM.
+    DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
+
+targets:
+  ClaudeUsage:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+      - path: Shared
+      - path: Resources
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jpuritz.claude-usage
+        INFOPLIST_FILE: Config/App-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/App.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ENABLE_HARDENED_RUNTIME: YES
+        # Host app is deliberately NOT sandboxed: it reads the Claude Code
+        # Keychain item and spawns the `claude` CLI, neither of which a
+        # sandboxed process can do.
+        ENABLE_APP_SANDBOX: NO
+    dependencies:
+      - target: ClaudeUsageWidget
+        embed: true
+
+  ClaudeUsageWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Widget
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jpuritz.claude-usage.widget
+        INFOPLIST_FILE: Config/Widget-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/Widget.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        # Widget extensions must be sandboxed.
+        ENABLE_APP_SANDBOX: YES
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework

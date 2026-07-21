@@ -1,17 +1,6 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Shared pieces
-
-func severityColor(_ pct: Double) -> Color {
-    switch pct {
-    case ..<50: return Color(red: 0.22, green: 0.72, blue: 0.45)
-    case ..<75: return Color(red: 0.95, green: 0.77, blue: 0.06)
-    case ..<90: return Color(red: 0.96, green: 0.55, blue: 0.14)
-    default: return Color(red: 0.91, green: 0.26, blue: 0.21)
-    }
-}
-
 struct LimitRow: View {
     let limit: UsageLimit
 
@@ -46,6 +35,8 @@ struct LimitRow: View {
 struct UsagePanelView: View {
     @ObservedObject var model: UsageModel
     var compact: Bool = false
+    /// Menus need an intrinsic width; the resizable window passes nil to flex.
+    var fixedWidth: CGFloat? = 264
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -82,33 +73,10 @@ struct UsagePanelView: View {
             }
         }
         .padding(compact ? 12 : 14)
-        .frame(width: 264, alignment: .leading)
+        .frame(width: fixedWidth, alignment: .leading)
+        .frame(maxWidth: fixedWidth == nil ? .infinity : nil, alignment: .leading)
     }
 }
 
-// MARK: - Desktop widget chrome
-
-struct VisualEffectBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let v = NSVisualEffectView()
-        v.material = .hudWindow
-        v.blendingMode = .behindWindow
-        v.state = .active
-        return v
-    }
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
-}
-
-struct DesktopWidgetView: View {
-    @ObservedObject var model: UsageModel
-
-    var body: some View {
-        UsagePanelView(model: model, compact: true)
-            .background(VisualEffectBackground())
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-            )
-    }
-}
+// The frosted-glass chrome that used to wrap this view is gone: the usage window
+// is now a standard titled window and uses the system's own window background.
