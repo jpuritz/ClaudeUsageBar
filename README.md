@@ -12,6 +12,20 @@ Code's `/usage`) in three places:
 
 Requires an active Claude subscription and the Claude Code CLI, signed in.
 
+## Screenshots
+
+**Desktop widget** — medium size shown; small and large also available:
+
+![The Claude Usage widget on the macOS desktop: a 31% session ring beside progress bars for each limit](docs/widget.png)
+
+**Menu bar** — ring plus session percentage, with the full breakdown and controls on click:
+
+![The Claude Usage menu bar dropdown listing each limit with reset countdowns, above menu options](docs/menubar.png)
+
+**Usage window** — resizable, remembers its frame, and can float on top:
+
+![The Claude Usage window showing each limit with progress bars and reset times](docs/window.png)
+
 ## Read this before installing
 
 This is an unofficial personal tool. It is **not affiliated with or endorsed by

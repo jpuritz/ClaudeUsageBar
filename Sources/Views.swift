@@ -37,12 +37,16 @@ struct UsagePanelView: View {
     var compact: Bool = false
     /// Menus need an intrinsic width; the resizable window passes nil to flex.
     var fixedWidth: CGFloat? = 264
+    /// The window puts the name in its title bar, so it hides this one.
+    var showsTitle: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Claude Usage")
-                    .font(.system(size: 12, weight: .bold))
+                if showsTitle {
+                    Text("Claude Usage")
+                        .font(.system(size: 12, weight: .bold))
+                }
                 Spacer()
                 if let sub = model.subscription, !sub.isEmpty {
                     Text(sub.capitalized)

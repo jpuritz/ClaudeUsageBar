@@ -33,7 +33,7 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
         window.backgroundColor = .windowBackgroundColor
         window.minSize = NSSize(width: 260, height: 180)
         window.contentView = NSHostingView(
-            rootView: UsagePanelView(model: model, fixedWidth: nil)
+            rootView: UsagePanelView(model: model, fixedWidth: nil, showsTitle: false)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         )
         // Show on every Space — it's a reference window, not a document.
