@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/github/license/jpuritz/ClaudeUsageBar)](LICENSE)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-lightgrey)
 
-![The Claude Usage desktop widget: a session-usage ring beside progress bars for each limit](docs/widget.png)
+![Opening Claude Usage: the ring icon in the menu bar, then the dropdown showing each limit with reset countdowns](docs/demo.gif)
 
 > **Unofficial** — not affiliated with or endorsed by Anthropic. It reads *your*
 > Claude Code sign-in from your Keychain and talks only to Anthropic's servers.
@@ -84,6 +84,10 @@ That token is what the app reads to fetch your usage; denying it leaves the app
 with nothing to show.
 
 ## Screenshots
+
+**Desktop widget** — medium size shown; small and large also available:
+
+![The Claude Usage widget on the macOS desktop: a session-usage ring beside progress bars for each limit](docs/widget.png)
 
 **Menu bar** — ring and session percentage, with the full breakdown and controls
 on click:
