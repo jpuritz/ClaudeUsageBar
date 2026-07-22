@@ -1,110 +1,55 @@
-# Claude Usage — menu bar app + desktop widget
+# Claude Usage
+
+> Watch your Claude usage limits from the macOS menu bar, a desktop widget, and
+> a status window — the same numbers as Claude Code's `/usage`, always in view.
 
 [![Downloads](https://img.shields.io/github/downloads/jpuritz/ClaudeUsageBar/total?label=downloads&color=brightgreen)](https://github.com/jpuritz/ClaudeUsageBar/releases)
 [![Latest release](https://img.shields.io/github/v/release/jpuritz/ClaudeUsageBar)](https://github.com/jpuritz/ClaudeUsageBar/releases/latest)
 [![License](https://img.shields.io/github/license/jpuritz/ClaudeUsageBar)](LICENSE)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-lightgrey)
 
-A native macOS app that shows your Claude usage limits (the same data as Claude
-Code's `/usage`) in three places:
+![The Claude Usage desktop widget: a session-usage ring beside progress bars for each limit](docs/widget.png)
 
-- **Menu bar**: a colored progress ring + your 5-hour session limit percentage.
-  Click it for per-limit bars, reset countdowns, and controls.
-- **Desktop widget**: a real WidgetKit widget in the system widget gallery
-  (small / medium / large). Right-click the desktop ▸ Edit Widgets ▸ "Claude Usage".
-- **Usage window**: a standard titled window with the full breakdown — resizable,
-  remembers its frame, optionally floats on top. Toggle it from the menu (⌘W).
+> **Unofficial** — not affiliated with or endorsed by Anthropic. It reads *your*
+> Claude Code sign-in from your Keychain and talks only to Anthropic's servers.
+> No telemetry. [What that means ↓](#how-it-works)
 
-It also shows **live Claude service status** (a colored line in the menu, and a
-dot on the menu-bar ring during an incident), refreshes on wake, and offers a
-global shortcut and a configurable poll interval — see [Menu options](#menu-options).
+**Requires:** macOS 14+, an active Claude subscription, and the
+[Claude Code CLI](https://code.claude.com) signed in.
 
-Requires an active Claude subscription and the Claude Code CLI, signed in.
+## Contents
 
-## Screenshots
+- [Features](#features)
+- [Install](#install)
+- [Screenshots](#screenshots)
+- [Menu options](#menu-options)
+- [Building from source](#building-from-source)
+- [How it works](#how-it-works)
+- [Architecture](#architecture)
 
-**Desktop widget** — medium size shown; small and large also available:
+## Features
 
-![The Claude Usage widget on the macOS desktop: a 31% session ring beside progress bars for each limit](docs/widget.png)
-
-**Menu bar** — ring plus session percentage, with the full breakdown and controls on click:
-
-![The Claude Usage menu bar dropdown listing each limit with reset countdowns, above menu options](docs/menubar.png)
-
-**Usage window** — resizable, remembers its frame, and can float on top:
-
-![The Claude Usage window showing each limit with progress bars and reset times](docs/window.png)
-
-## Read this before installing
-
-This is an unofficial personal tool. It is **not affiliated with or endorsed by
-Anthropic**, and it relies on two things you should know about:
-
-1. **It calls an undocumented internal endpoint** (`/api/oauth/usage`) — the same
-   one that powers Claude Code's `/usage`. There is no stability guarantee:
-   Anthropic can change, restrict, or remove it at any time, and this app would
-   break. Use at your own risk.
-2. **It identifies itself as `claude-code/<version>`.** That endpoint rejects
-   unrecognized User-Agents, so the app sends the same one the CLI does. It reads
-   only your own usage data, using your own credentials, on your own machine.
-
-**Credential handling:** it reads (never writes) the OAuth token Claude Code
-stores in your login Keychain under `Claude Code-credentials`. That token is sent
-to exactly one place — `api.anthropic.com` — and nowhere else. It is never
-logged, displayed, or transmitted to any third party. There is no telemetry and
-no network activity beyond the Anthropic API and the local `claude` CLI. All the
-relevant code is in [Sources/Keychain.swift](Sources/Keychain.swift) and
-[Sources/UsageModel.swift](Sources/UsageModel.swift) — it's short; read it.
-
-## How it works
-
-It reads the Keychain OAuth token and polls the usage endpoint every 30 seconds,
-with `Retry-After`-aware exponential backoff on 429s.
-
-### Keeping sign-in alive (no manual /login)
-
-Access tokens last ~8 hours. The app cannot refresh them directly — the OAuth
-refresh endpoint (`platform.claude.com/v1/oauth/token`) blocks non-browser
-clients with a persistent 429. Neither does `claude auth status`, which only
-reports locally-stored state and never hits the network.
-
-What *does* renew the Keychain credential is **any real CLI API call**. So when
-the usage endpoint returns 401, the app runs:
-
-```sh
-claude -p "hi" --model haiku --no-session-persistence
-```
-
-…which makes the CLI renew the token and write it back to the Keychain; the app
-then retries with the fresh token. This fires roughly 3× a day and costs a
-negligible number of tokens. It's rate-limited to one invocation per 5 minutes,
-with a 45-second timeout. Only if that fails does the app ask you to run
-`claude` → `/login`.
-
-### Approaches that do NOT work
-
-Documented so nobody repeats the dead ends:
-
-- **Calling the OAuth refresh endpoint from the app.** `platform.claude.com/v1/oauth/token`
-  returns a persistent 429 to non-browser clients — it never clears, and behaves
-  identically via `URLSession` and `curl` (with or without HTTP/1.1). Looks like
-  bot protection rather than a rate limit.
-- **`claude auth status`.** Reports only locally-stored state and never hits the
-  network — it returns `loggedIn: true` even when the stored token is long dead.
-- **`claude setup-token` long-lived tokens.** Scoped for the Anthropic API, not
-  the `/oauth/usage` endpoint, so they're rejected with 401. (The app will still
-  prefer a token placed in a `ClaudeUsage-token` Keychain item if you add one,
-  but this is not a working path today.)
-
-### Debugging note
-
-The Keychain's `expiresAt` is a Unix timestamp — most tooling renders it in
-**local** time. Print both zones when comparing against expiry, or you'll chase
-failures that haven't happened yet.
+- **Menu bar** — a colored ring and your 5-hour session percentage; click for
+  every limit with reset countdowns.
+- **Desktop widget** — a real WidgetKit widget (small / medium / large) in the
+  system widget gallery, with native styling.
+- **Usage window** — the full breakdown in a normal window: resizable, remembers
+  its position, and can float on top.
+- **Live Claude service status** — a colored line in the menu and an incident dot
+  on the ring when claude.ai, Claude API, Claude Code, or Claude Console is
+  disrupted.
+- **Notifications** — 80% / 95% thresholds, reset alerts, burn-rate "on pace to
+  run out" warnings, and service up/down alerts. Each independently toggleable.
+- **Stays signed in** — renews the Keychain token automatically, so you rarely
+  need to run `/login` again.
+- **Global shortcut** (⌘⇧U) opens the window from anywhere — no Accessibility
+  permission required.
+- **Configurable refresh** (15 s – 2 min), plus an instant refresh when your Mac
+  wakes from sleep.
 
 ## Install
 
-### Homebrew (menu bar + window, no widget)
+### Homebrew (recommended)
 
 ```sh
 brew install --cask --no-quarantine jpuritz/tap/claude-usage
@@ -113,41 +58,47 @@ brew install --cask --no-quarantine jpuritz/tap/claude-usage
 The `--no-quarantine` flag matters: the build is ad-hoc signed, and without it
 Gatekeeper blocks the first launch.
 
-### Download (same build, manual)
+### Manual download
 
 Grab `ClaudeUsage-menubar.zip` from the
 [latest release](https://github.com/jpuritz/ClaudeUsageBar/releases/latest),
-unzip, and drag **Claude Usage.app** to `/Applications`.
-
-It's **ad-hoc signed**, so macOS quarantines it on first open. Clear that once:
+unzip, and drag **Claude Usage.app** to `/Applications`. Then clear quarantine
+once (ad-hoc signing again):
 
 ```sh
 xattr -dr com.apple.quarantine "/Applications/Claude Usage.app"
 ```
 
-(Or open it via right-click ▸ Open, then System Settings ▸ Privacy & Security ▸
-*Open Anyway*.)
+Or open it via right-click ▸ Open, then System Settings ▸ Privacy & Security ▸
+*Open Anyway*.
 
-**Why the download has no widget, and why it isn't properly signed:** shipping
-the WidgetKit widget requires an App Group entitlement, which requires a
-provisioning profile from a paid Apple Developer account ($99/yr) — a free
-Personal Team certificate is development-only and won't launch on anyone else's
-Mac. Distributing without Gatekeeper warnings needs a Developer ID certificate
-from that same paid account. Neither is something this project has, so: the
-download is the menu-bar build, and **the widget means building from source**
-(free, but needs Xcode). See [Building](#building).
+> **Want the desktop widget?** The download is the **menu bar + window** build.
+> The widget can't be distributed for free — it needs an App Group entitlement,
+> which needs a paid Apple Developer account — so it's **build-from-source**
+> (free, but requires Xcode). See [Building from source](#building-from-source).
 
 ### First launch
 
-macOS will ask: *"ClaudeUsage wants to use your confidential information stored
-in 'Claude Code-credentials'"* — click **Always Allow**. The app reads that
-token to call the usage endpoint; denying it leaves the app with nothing to show.
+macOS will ask to access *Claude Code-credentials* — click **Always Allow**.
+That token is what the app reads to fetch your usage; denying it leaves the app
+with nothing to show.
+
+## Screenshots
+
+**Menu bar** — ring and session percentage, with the full breakdown and controls
+on click:
+
+![The Claude Usage menu bar dropdown listing each limit with reset countdowns, above menu options](docs/menubar.png)
+
+**Usage window** — resizable, remembers its frame, and can float on top:
+
+![The Claude Usage window showing each limit with progress bars and reset times](docs/window.png)
 
 ## Menu options
 
 - **Claude service status** — top line, colored; click to open status.claude.com.
   Watches claude.ai, Claude API, Claude Code, and Claude Console.
-- **Refresh Now** (⌘R while menu open)
+- **Refresh Now** (⌘R while the menu is open)
 - **Usage Window** (⌘W) — show/hide the detail window
 - **Keep Window on Top** — pin that window above other apps
 - **Notifications** submenu:
@@ -160,18 +111,18 @@ token to call the usage endpoint; denying it leaves the app with nothing to show
 - **Refresh Interval** — 15 s / 30 s / 1 min / 2 min (default 30 s)
 - **Global Shortcut (⌘⇧U)** — open the usage window from anywhere; off by default.
   Uses Carbon hotkeys, so **no Accessibility permission** is needed.
-- **Launch at Login** — via SMAppService (also toggleable in
+- **Launch at Login** — via `SMAppService` (also toggleable in
   System Settings → General → Login Items)
 - **Quit Claude Usage**
 
-The app also refreshes immediately when the Mac wakes from sleep, so the first
-reading after waking isn't stale.
+The app also refreshes immediately when the Mac wakes, so the first reading after
+sleep isn't stale.
 
-## Building
+## Building from source
 
-Two build paths, depending on whether you want the WidgetKit widget.
+Two paths, depending on whether you want the WidgetKit widget.
 
-### With the widget (recommended) — needs Xcode
+### With the widget (needs Xcode)
 
 ```sh
 brew install xcodegen
@@ -197,23 +148,27 @@ First time only, before that script will succeed:
 Then add the widget: right-click the desktop ▸ **Edit Widgets** ▸ search
 "Claude Usage" ▸ drag out the size you want.
 
-**Why the Apple ID is required:** the app and widget are separate processes that
+The Apple ID is required because the app and widget are separate processes that
 share data through an **App Group**, and that entitlement can't be ad-hoc signed.
-
-**Troubleshooting**
-
-- *"has entitlements that require signing with a development certificate"* — no
-  Team selected yet; do step 3.
-- *"invalid or unsupported format for signature"* — stale build artifacts. Run
-  `rm -rf build/dd` and rebuild.
-- *Widget doesn't appear in the gallery* — it's registered from the installed
-  copy, so the app must be in `/Applications`. Confirm with:
-  `pluginkit -mv -p com.apple.widgetkit-extension | grep claude`
-
 The Xcode project is generated from [`project.yml`](project.yml) by XcodeGen, so
 edit that rather than the `.xcodeproj` (which is gitignored).
 
-### Without the widget — Command Line Tools only
+<details>
+<summary>Widget build troubleshooting</summary>
+
+- *"has entitlements that require signing with a development certificate"* — no
+  Team selected yet; do step 3 above.
+- *"invalid or unsupported format for signature"* — stale build artifacts. Run
+  `rm -rf build/dd` and rebuild.
+- *Widget doesn't appear in the gallery* — it's registered from the installed
+  copy, so the app must be in `/Applications`. Confirm with
+  `pluginkit -mv -p com.apple.widgetkit-extension | grep claude`.
+- *Widget shows old data* — make sure only the `/Applications` copy is running.
+  An ad-hoc `build.sh` copy in `~/Applications` can't write the shared snapshot.
+
+</details>
+
+### Without the widget (Command Line Tools only)
 
 No Xcode, no Apple ID. Menu bar and usage window work fully; there's just no
 widget.
@@ -225,10 +180,55 @@ widget.
 
 This is what the published release contains.
 
+## How it works
+
+The app reads the OAuth token that Claude Code stores in your login Keychain
+(`Claude Code-credentials`) and polls `api.anthropic.com/api/oauth/usage` — the
+same undocumented endpoint that powers Claude Code's `/usage` — every 30 seconds,
+with `Retry-After`-aware backoff on 429s.
+
+**Privacy.** It *reads* (never writes) that token and sends it to exactly one
+place: `api.anthropic.com`. The token is never logged, displayed, or sent to any
+third party. There's no telemetry and no network activity beyond the Anthropic
+API and the local `claude` CLI. The relevant code is short — see
+[Sources/Keychain.swift](Sources/Keychain.swift) and
+[Sources/UsageModel.swift](Sources/UsageModel.swift).
+
+**Two things to know.** Because it uses an *undocumented* endpoint, Anthropic can
+change or remove it at any time and the app would break. And it identifies itself
+as `claude-code/<version>`, because that endpoint rejects unrecognized
+User-Agents — it reads only your own data, with your own credentials.
+
+**Keeping you signed in.** Access tokens last ~8 hours. The app can't refresh
+them directly, but a real CLI call does — so on a 401 it runs a tiny
+`claude -p "hi" --model haiku --no-session-persistence`, which makes the CLI
+renew the Keychain token, then retries. This fires ~3× a day for a negligible
+number of tokens (rate-limited to one call per 5 minutes). Only if that fails
+does it ask you to run `claude` → `/login`.
+
+<details>
+<summary>Approaches that do NOT work (so nobody repeats them)</summary>
+
+- **Calling the OAuth refresh endpoint from the app.**
+  `platform.claude.com/v1/oauth/token` returns a persistent 429 to non-browser
+  clients — it never clears, and behaves identically via `URLSession` and `curl`
+  (with or without HTTP/1.1). Looks like bot protection, not a rate limit.
+- **`claude auth status`.** Reports only locally-stored state and never hits the
+  network — it returns `loggedIn: true` even when the stored token is long dead.
+- **`claude setup-token` long-lived tokens.** Scoped for the Anthropic API, not
+  the `/oauth/usage` endpoint, so they're rejected with 401. (The app will prefer
+  a token placed in a `ClaudeUsage-token` Keychain item if you add one, but this
+  isn't a working path today.)
+- **Timezone gotcha when debugging:** the Keychain's `expiresAt` is a Unix
+  timestamp that most tooling renders in *local* time. Print both zones when
+  comparing against expiry, or you'll chase failures that haven't happened yet.
+
+</details>
+
 ## Architecture
 
 ```
-Sources/   host app (menu bar, window, fetching, notifications)
+Sources/   host app (menu bar, window, fetching, notifications, status)
 Widget/    WidgetKit extension
 Shared/    model + formatting compiled into BOTH targets
 Config/    Info.plists and entitlements
@@ -238,21 +238,24 @@ The host app is deliberately **not sandboxed** — it reads the Claude Code
 Keychain item and spawns the `claude` CLI, neither of which a sandboxed process
 can do. Widget extensions, by contrast, *must* be sandboxed. So they can't share
 memory or arbitrary files: the app writes a JSON snapshot into the shared App
-Group container and calls `WidgetCenter.reloadAllTimelines()`, and the widget
-only ever reads that snapshot. The widget never touches your credentials.
+Group container and calls `WidgetCenter.reloadAllTimelines()`; the widget only
+ever reads that snapshot and never touches your credentials.
 
 The app pushes a widget reload on every poll (~30 s), but macOS throttles and
 coalesces widget refreshes on its own schedule, so the widget updates less often
 than that in practice — every view shows an "updated Xm ago" stamp rather than
-implying the number is live. The menu bar, which the app draws directly, is the
-one that actually tracks the 30-second cadence.
+implying the number is live. The menu bar, drawn directly by the app, is the one
+that tracks the full cadence.
 
-## Notes
+**Details worth knowing:**
 
-- Colors: green < 50 %, yellow < 75 %, orange < 90 %, red ≥ 90 %.
+- Colors: green < 50%, yellow < 75%, orange < 90%, red ≥ 90%.
 - The menu bar and widget headline show the **5-hour session** limit (the one
   that bites mid-session), falling back to the highest limit if absent. The menu,
   window, and medium/large widgets list every limit.
-- Installing to `/Applications` matters for the widget build: macOS registers
-  widget extensions from a stable location. If you previously used `build.sh`,
-  delete the old `~/Applications/Claude Usage.app` so you don't run both.
+- The usage parser is generic: if Anthropic adds a new limit, it appears
+  automatically — no code change needed.
+
+## License
+
+[MIT](LICENSE) © Jon Puritz
