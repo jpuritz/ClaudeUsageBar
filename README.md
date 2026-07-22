@@ -100,7 +100,16 @@ failures that haven't happened yet.
 
 ## Install
 
-### Download (menu bar + window, no widget)
+### Homebrew (menu bar + window, no widget)
+
+```sh
+brew install --cask --no-quarantine jpuritz/tap/claude-usage
+```
+
+The `--no-quarantine` flag matters: the build is ad-hoc signed, and without it
+Gatekeeper blocks the first launch.
+
+### Download (same build, manual)
 
 Grab `ClaudeUsage-menubar.zip` from the
 [latest release](https://github.com/jpuritz/ClaudeUsageBar/releases/latest),
