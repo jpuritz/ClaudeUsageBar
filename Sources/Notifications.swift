@@ -23,6 +23,24 @@ enum Prefs {
         get { bool("NotifyPace", default: true) }
         set { set("NotifyPace", newValue) }
     }
+    static var notifyStatus: Bool {
+        get { bool("NotifyStatus", default: true) }
+        set { set("NotifyStatus", newValue) }
+    }
+    static var hotkeyEnabled: Bool {
+        get { bool("HotkeyEnabled", default: false) }
+        set { set("HotkeyEnabled", newValue) }
+    }
+
+    /// Usage-endpoint poll interval, seconds. Clamped to a sane menu of choices.
+    static let pollChoices: [Int] = [15, 30, 60, 120]
+    static var pollInterval: Int {
+        get {
+            let v = UserDefaults.standard.object(forKey: "PollInterval") as? Int ?? 30
+            return pollChoices.contains(v) ? v : 30
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "PollInterval") }
+    }
 }
 
 // MARK: - Notification delivery

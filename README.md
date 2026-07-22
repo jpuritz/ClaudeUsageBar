@@ -15,6 +15,10 @@ Code's `/usage`) in three places:
 - **Usage window**: a standard titled window with the full breakdown — resizable,
   remembers its frame, optionally floats on top. Toggle it from the menu (⌘W).
 
+It also shows **live Claude service status** (a colored line in the menu, and a
+dot on the menu-bar ring during an incident), refreshes on wake, and offers a
+global shortcut and a configurable poll interval — see [Menu options](#menu-options).
+
 Requires an active Claude subscription and the Claude Code CLI, signed in.
 
 ## Screenshots
@@ -141,6 +145,8 @@ token to call the usage endpoint; denying it leaves the app with nothing to show
 
 ## Menu options
 
+- **Claude service status** — top line, colored; click to open status.claude.com.
+  Watches claude.ai, Claude API, Claude Code, and Claude Console.
 - **Refresh Now** (⌘R while menu open)
 - **Usage Window** (⌘W) — show/hide the detail window
 - **Keep Window on Top** — pin that window above other apps
@@ -150,9 +156,16 @@ token to call the usage endpoint; denying it leaves the app with nothing to show
     so it fires even if the Mac was asleep at reset time
   - *Usage Pace Warnings* — burn-rate projection over the last hour; warns once
     per window if you're on pace to hit 100% before the reset arrives
+  - *Claude Service Alerts* — banner when a watched service goes down or recovers
+- **Refresh Interval** — 15 s / 30 s / 1 min / 2 min (default 30 s)
+- **Global Shortcut (⌘⇧U)** — open the usage window from anywhere; off by default.
+  Uses Carbon hotkeys, so **no Accessibility permission** is needed.
 - **Launch at Login** — via SMAppService (also toggleable in
   System Settings → General → Login Items)
 - **Quit Claude Usage**
+
+The app also refreshes immediately when the Mac wakes from sleep, so the first
+reading after waking isn't stale.
 
 ## Building
 

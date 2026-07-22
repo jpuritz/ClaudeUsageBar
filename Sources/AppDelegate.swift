@@ -7,9 +7,12 @@ import ServiceManagement
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private let model = UsageModel()
+    private let status = StatusModel()
     private var usageWindow: UsageWindowController!
     private var timer: Timer?
+    private var statusTimer: Timer?
     private var cancellable: AnyCancellable?
+    private var statusCancellable: AnyCancellable?
     private let menu = NSMenu()
 
     private static let windowVisibleKey = "ShowUsageWindow"
@@ -40,10 +43,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .sink { [weak self] _ in
                 DispatchQueue.main.async { self?.updateStatusButton() }
             }
+        statusCancellable = status.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { self?.updateStatusButton() }
+            }
 
         model.refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+        status.refresh()
+        startPollTimer()
+        // Claude's status changes far less often than usage; poll it every 3 min.
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 180, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.status.refresh() }
+        }
+
+        // Refresh promptly after the Mac wakes — the timer alone can leave the
+        // first post-wake reading minutes stale.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.model.refresh(force: true)
+                self?.status.refresh()
+            }
+        }
+
+        if Prefs.hotkeyEnabled { enableHotkey(true) }
+    }
+
+    /// (Re)starts the usage poll timer at the user's chosen interval.
+    private func startPollTimer() {
+        timer?.invalidate()
+        let interval = TimeInterval(Prefs.pollInterval)
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.model.refresh() }
+        }
+    }
+
+    private func enableHotkey(_ on: Bool) {
+        HotkeyManager.shared.setEnabled(on) { [weak self] in
+            guard let self else { return }
+            self.usageWindow.show()
+            UserDefaults.standard.set(true, forKey: Self.windowVisibleKey)
         }
     }
 
@@ -51,17 +92,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func updateStatusButton() {
         guard let button = statusItem.button else { return }
+        // Overlay a small incident dot on the ring only when a service is down.
+        let incident = !status.health.isOperational && status.health != .unknown
+        let dotColor = incident ? status.health.nsColor : nil
+
         if let shown = model.menuBarUtilization {
-            button.image = Self.ringImage(fraction: shown / 100.0)
+            button.image = Self.ringImage(fraction: shown / 100.0, incidentDot: dotColor)
             button.attributedTitle = NSAttributedString(
                 string: " \(UsageFormat.percent(shown))",
                 attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)]
             )
-            button.toolTip = model.limits
+            var tip = model.limits
                 .map { "\($0.label): \(UsageFormat.percent($0.utilization))" }
                 .joined(separator: "\n")
+            if incident { tip += "\n⚠︎ Claude: \(status.summary)" }
+            button.toolTip = tip
         } else {
-            button.image = Self.ringImage(fraction: 0)
+            button.image = Self.ringImage(fraction: 0, incidentDot: dotColor)
             button.attributedTitle = NSAttributedString(
                 string: " –",
                 attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)]
@@ -70,10 +117,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// Small progress ring, colored by severity.
-    private static func ringImage(fraction: Double) -> NSImage {
+    /// Small progress ring, colored by severity, with an optional incident dot.
+    private static func ringImage(fraction: Double, incidentDot: NSColor? = nil) -> NSImage {
         let side: CGFloat = 16
-        return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+        let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
             let lineWidth: CGFloat = 2.5
             let r = rect.insetBy(dx: lineWidth / 2 + 0.5, dy: lineWidth / 2 + 0.5)
             let center = NSPoint(x: rect.midX, y: rect.midY)
@@ -105,8 +152,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 color.setStroke()
                 arc.stroke()
             }
+
+            if let incidentDot {
+                let d: CGFloat = 6
+                let dotRect = NSRect(x: rect.maxX - d, y: rect.maxY - d, width: d, height: d)
+                incidentDot.setFill()
+                NSBezierPath(ovalIn: dotRect).fill()
+            }
             return true
         }
+        img.isTemplate = false
+        return img
     }
 
     // MARK: - Menu
@@ -122,6 +178,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hosting.frame = NSRect(x: 0, y: 0, width: max(264, size.width), height: size.height)
         panelItem.view = hosting
         menu.addItem(panelItem)
+
+        menu.addItem(.separator())
+
+        // Claude service health — a single summary line, colored.
+        let statusItemLine = NSMenuItem()
+        statusItemLine.attributedTitle = statusMenuTitle()
+        statusItemLine.action = #selector(openStatusPage)
+        statusItemLine.target = self
+        statusItemLine.toolTip = status.components
+            .map { "\($0.name): \(status.statusLabel($0.status))" }
+            .joined(separator: "\n")
+        menu.addItem(statusItemLine)
 
         menu.addItem(.separator())
 
@@ -152,6 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ("Alert at 80% and 95%", "thresholds"),
             ("Alert When Limits Reset", "resets"),
             ("Usage Pace Warnings", "pace"),
+            ("Claude Service Alerts", "status"),
         ] {
             let item = NSMenuItem(title: title, action: #selector(toggleNotifPref(_:)), keyEquivalent: "")
             item.target = self
@@ -160,6 +229,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             notifMenu.addItem(item)
         }
         menu.addItem(notifItem)
+
+        // Refresh interval submenu.
+        let intervalMenu = NSMenu()
+        let intervalItem = NSMenuItem(title: "Refresh Interval", action: nil, keyEquivalent: "")
+        intervalItem.submenu = intervalMenu
+        for secs in Prefs.pollChoices {
+            let item = NSMenuItem(
+                title: secs < 60 ? "\(secs) seconds" : "\(secs / 60) minute\(secs == 60 ? "" : "s")",
+                action: #selector(setInterval(_:)), keyEquivalent: ""
+            )
+            item.target = self
+            item.tag = secs
+            item.state = Prefs.pollInterval == secs ? .on : .off
+            intervalMenu.addItem(item)
+        }
+        menu.addItem(intervalItem)
+
+        let hotkeyItem = NSMenuItem(
+            title: "Global Shortcut (\(HotkeyManager.comboDescription))",
+            action: #selector(toggleHotkey), keyEquivalent: ""
+        )
+        hotkeyItem.target = self
+        hotkeyItem.state = Prefs.hotkeyEnabled ? .on : .off
+        hotkeyItem.toolTip = "Open the usage window from anywhere with \(HotkeyManager.comboDescription)."
+        menu.addItem(hotkeyItem)
 
         let login = NSMenuItem(
             title: "Launch at Login",
@@ -182,10 +276,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// The colored "Claude services: …" line shown in the menu.
+    private func statusMenuTitle() -> NSAttributedString {
+        let dot = "●  "
+        let text: String
+        let color: NSColor
+        switch status.health {
+        case .none:
+            text = "All Claude services operational"; color = ServiceHealth.none.nsColor
+        case .unknown:
+            text = "Claude status: checking…"; color = .secondaryLabelColor
+        default:
+            // Name the affected services when we have them.
+            let down = status.components.filter { !$0.isOperational }.map(\.name)
+            text = down.isEmpty
+                ? "Claude: \(status.summary)"
+                : "Claude issue: \(down.joined(separator: ", "))"
+            color = status.health.nsColor
+        }
+        let s = NSMutableAttributedString(
+            string: dot, attributes: [.foregroundColor: color, .font: NSFont.systemFont(ofSize: 11)]
+        )
+        s.append(NSAttributedString(
+            string: text,
+            attributes: [.foregroundColor: NSColor.labelColor, .font: NSFont.systemFont(ofSize: 12)]
+        ))
+        return s
+    }
+
+    @objc private func openStatusPage() {
+        NSWorkspace.shared.open(URL(string: "https://status.claude.com")!)
+    }
+
+    @objc private func setInterval(_ sender: NSMenuItem) {
+        Prefs.pollInterval = sender.tag
+        startPollTimer()
+        model.refresh(force: true)
+    }
+
+    @objc private func toggleHotkey() {
+        Prefs.hotkeyEnabled.toggle()
+        enableHotkey(Prefs.hotkeyEnabled)
+    }
+
     private static func notifPref(_ key: String) -> Bool {
         switch key {
         case "thresholds": return Prefs.notifyThresholds
         case "resets": return Prefs.notifyResets
+        case "status": return Prefs.notifyStatus
         default: return Prefs.notifyPace
         }
     }
@@ -201,6 +339,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     ids: model.limits.map { "resetsched-\($0.id)" }
                 )
             }
+        case "status": Prefs.notifyStatus.toggle()
         default: Prefs.notifyPace.toggle()
         }
     }
