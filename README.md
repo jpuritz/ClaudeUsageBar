@@ -54,7 +54,7 @@ relevant code is in [Sources/Keychain.swift](Sources/Keychain.swift) and
 
 ## How it works
 
-It reads the Keychain OAuth token and polls the usage endpoint every minute,
+It reads the Keychain OAuth token and polls the usage endpoint every 30 seconds,
 with `Retry-After`-aware exponential backoff on 429s.
 
 ### Keeping sign-in alive (no manual /login)
@@ -219,10 +219,11 @@ memory or arbitrary files: the app writes a JSON snapshot into the shared App
 Group container and calls `WidgetCenter.reloadAllTimelines()`, and the widget
 only ever reads that snapshot. The widget never touches your credentials.
 
-Because the app pushes reloads on every poll, the widget tracks the ~1 minute
-refresh rather than WidgetKit's lazy default schedule. macOS may still throttle
-reloads, so every view shows an "updated Xm ago" stamp rather than implying the
-number is live.
+The app pushes a widget reload on every poll (~30 s), but macOS throttles and
+coalesces widget refreshes on its own schedule, so the widget updates less often
+than that in practice — every view shows an "updated Xm ago" stamp rather than
+implying the number is live. The menu bar, which the app draws directly, is the
+one that actually tracks the 30-second cadence.
 
 ## Notes
 
