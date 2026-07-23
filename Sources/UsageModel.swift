@@ -60,24 +60,48 @@ final class UsageModel: ObservableObject {
         let subscription: String?
     }
 
-    /// Picks the access token to use. Priority: (1) a user-set long-lived token,
-    /// (2) Claude Code's credentials, read-only.
+    /// Picks the access token to use, minimizing reads of Claude Code's Keychain
+    /// item. Priority:
+    ///   1. A user-set long-lived token (`ClaudeUsage-token`).
+    ///   2. Our own cached copy of the CLI token (`ClaudeUsage-session`).
+    ///   3. Claude Code's credentials — read once to bootstrap, then cached in (2).
     ///
-    /// Note: we deliberately IGNORE the credential's `expiresAt` and just use the
-    /// token — the server is the authority on validity, and the token is commonly
-    /// accepted past its nominal expiry. The app cannot refresh tokens itself: the
-    /// OAuth refresh endpoint (platform.claude.com) sits behind Cloudflare bot
-    /// protection that blocks non-browser clients. When the server truly rejects
-    /// the token (401/403), we tell the user to re-run `/login`.
+    /// Why the cache: reading Claude Code's item is a *cross-app* Keychain access,
+    /// which macOS gates with an authorization prompt (and re-prompts whenever our
+    /// signature changes). Reading our OWN item never prompts. So normal polling
+    /// and wake-refreshes read the cache and stay silent; we only touch Claude
+    /// Code's item on first launch and after a 401 (see the 401 handler, which
+    /// clears the cache so the freshly-renewed credential is re-read).
+    ///
+    /// We deliberately IGNORE `expiresAt` and use the token until the server
+    /// rejects it — the server is the authority, and tokens are often accepted
+    /// past their nominal expiry.
     private func resolveToken() async throws -> ResolvedToken {
+        // (1) User-set long-lived token.
         if let custom = await Task.detached(priority: .userInitiated, operation: {
             KeychainReader.readCustomToken()
         }).value {
             return ResolvedToken(token: custom, isCustom: true, subscription: nil)
         }
+
+        // (2) Our own cached copy — no authorization prompt.
+        if let session = await Task.detached(priority: .userInitiated, operation: {
+            KeychainReader.readSession()
+        }).value {
+            return ResolvedToken(token: session.accessToken, isCustom: false,
+                                 subscription: session.subscriptionType)
+        }
+
+        // (3) Bootstrap from Claude Code's item (may prompt once), then cache.
         let creds = try await Task.detached(priority: .userInitiated) {
             try KeychainReader.readClaudeCredentials()
         }.value
+        KeychainReader.writeSession(
+            accessToken: creds.accessToken,
+            refreshToken: creds.refreshToken,
+            expiresAt: creds.expiresAt ?? .distantFuture,
+            subscription: creds.subscriptionType
+        )
         return ResolvedToken(token: creds.accessToken, isCustom: false,
                              subscription: creds.subscriptionType)
     }
@@ -218,9 +242,11 @@ final class UsageModel: ObservableObject {
                 errorMessage = "Long-lived token rejected — remove the ClaudeUsage-token Keychain item to fall back."
             } else if Date().timeIntervalSince(lastCLIRefresh) > 300,
                       await Self.runCLIAuthRefresh() {
-                // The CLI owns this credential's lifecycle and can reach the
-                // refresh endpoint (which blocks this app directly). Ask it to
-                // refresh, then use whatever it wrote back to the Keychain.
+                // Our cached token was rejected. The CLI owns this credential's
+                // lifecycle and can reach the refresh endpoint (which blocks this
+                // app directly), so it just renewed Claude Code's item. Drop our
+                // stale cache so the retry re-reads and re-caches the fresh token.
+                KeychainReader.clearSession()
                 Self.appendLog("401 → triggered CLI to renew credential.")
                 errorMessage = "Refreshing sign-in…"
                 lastCLIRefresh = Date()

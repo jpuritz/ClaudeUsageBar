@@ -91,16 +91,19 @@ enum KeychainReader {
             accessToken: access,
             refreshToken: obj["refreshToken"] as? String,
             expiresAt: expires,
-            subscriptionType: nil
+            subscriptionType: obj["subscriptionType"] as? String
         )
     }
 
-    static func writeSession(accessToken: String, refreshToken: String?, expiresAt: Date) {
+    static func writeSession(
+        accessToken: String, refreshToken: String?, expiresAt: Date, subscription: String? = nil
+    ) {
         var obj: [String: Any] = [
             "accessToken": accessToken,
             "expiresAt": expiresAt.timeIntervalSince1970,
         ]
         if let refreshToken { obj["refreshToken"] = refreshToken }
+        if let subscription { obj["subscriptionType"] = subscription }
         guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
         writeData(data, service: "ClaudeUsage-session")
     }

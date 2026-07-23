@@ -62,6 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
+            // Both read prompt-free now: status hits a public endpoint, and usage
+            // reads the app's own cached token (not Claude Code's Keychain item).
             Task { @MainActor in
                 self?.model.refresh(force: true)
                 self?.status.refresh()
