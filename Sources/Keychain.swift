@@ -29,7 +29,7 @@ enum KeychainError: Error, LocalizedError {
 }
 
 enum KeychainReader {
-    /// Optional claude.ai session cookie, stored under "ClaudeUsage-cookie".
+    /// Optional claude.ai session cookie, stored under "Claudar-cookie".
     ///
     /// When present this is preferred over the Claude Code credentials, because
     /// it's an item this app OWNS — reading it never triggers an authorization
@@ -37,7 +37,7 @@ enum KeychainReader {
     /// time the CLI renews the token (~every 8h), which is the whole reason this
     /// mode exists.
     static func readCookie() -> String? {
-        guard let data = readData(service: "ClaudeUsage-cookie"),
+        guard let data = readData(service: "Claudar-cookie"),
               let s = String(data: data, encoding: .utf8)?
                   .trimmingCharacters(in: .whitespacesAndNewlines),
               !s.isEmpty
@@ -48,19 +48,19 @@ enum KeychainReader {
     /// Saves a claude.ai Cookie header (written by the embedded sign-in).
     static func writeCookie(_ header: String) {
         guard let data = header.data(using: .utf8) else { return }
-        writeData(data, service: "ClaudeUsage-cookie")
+        writeData(data, service: "Claudar-cookie")
     }
 
     static func clearCookie() {
         SecItemDelete([
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "ClaudeUsage-cookie",
+            kSecAttrService as String: "Claudar-cookie",
         ] as CFDictionary)
     }
 
-    /// Optional user-provided long-lived token, stored under "ClaudeUsage-token".
+    /// Optional user-provided long-lived token, stored under "Claudar-token".
     static func readCustomToken() -> String? {
-        guard let data = readData(service: "ClaudeUsage-token"),
+        guard let data = readData(service: "Claudar-token"),
               let token = String(data: data, encoding: .utf8)?
                   .trimmingCharacters(in: .whitespacesAndNewlines),
               !token.isEmpty
@@ -104,13 +104,13 @@ enum KeychainReader {
         )
     }
 
-    // MARK: - App-private session store ("ClaudeUsage-session")
+    // MARK: - App-private session store ("Claudar-session")
     //
     // Holds refreshed tokens the app mints itself. Completely separate from the
     // Claude Code credential item, which this app only ever reads.
 
     static func readSession() -> OAuthCredentials? {
-        guard let data = readData(service: "ClaudeUsage-session"),
+        guard let data = readData(service: "Claudar-session"),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let access = obj["accessToken"] as? String
         else { return nil }
@@ -134,13 +134,13 @@ enum KeychainReader {
         if let refreshToken { obj["refreshToken"] = refreshToken }
         if let subscription { obj["subscriptionType"] = subscription }
         guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
-        writeData(data, service: "ClaudeUsage-session")
+        writeData(data, service: "Claudar-session")
     }
 
     static func clearSession() {
         SecItemDelete([
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "ClaudeUsage-session",
+            kSecAttrService as String: "Claudar-session",
         ] as CFDictionary)
     }
 
@@ -168,7 +168,7 @@ enum KeychainReader {
         if updated == errSecItemNotFound {
             var add = base
             add[kSecValueData as String] = data
-            add[kSecAttrAccount as String] = "claude-usage"
+            add[kSecAttrAccount as String] = "claudar"
             SecItemAdd(add as CFDictionary, nil)
         }
     }

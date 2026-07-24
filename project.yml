@@ -1,4 +1,4 @@
-name: ClaudeUsage
+name: Claudar
 options:
   bundleIdPrefix: com.jpuritz
   deploymentTarget:
@@ -7,7 +7,7 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "1.1"
+    MARKETING_VERSION: "1.7"
     CURRENT_PROJECT_VERSION: "2"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
@@ -15,7 +15,7 @@ settings:
     DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
 
 targets:
-  ClaudeUsage:
+  Claudar:
     type: application
     platform: macOS
     sources:
@@ -25,7 +25,7 @@ targets:
         buildPhase: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jpuritz.claude-usage
+        PRODUCT_BUNDLE_IDENTIFIER: com.jpuritz.claudar
         INFOPLIST_FILE: Config/App-Info.plist
         CODE_SIGN_ENTITLEMENTS: Config/App.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
@@ -35,10 +35,10 @@ targets:
         # sandboxed process can do.
         ENABLE_APP_SANDBOX: NO
     dependencies:
-      - target: ClaudeUsageWidget
+      - target: ClaudarWidget
         embed: true
 
-  ClaudeUsageWidget:
+  ClaudarWidget:
     type: app-extension
     platform: macOS
     sources:
@@ -46,7 +46,7 @@ targets:
       - path: Shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jpuritz.claude-usage.widget
+        PRODUCT_BUNDLE_IDENTIFIER: com.jpuritz.claudar.widget
         INFOPLIST_FILE: Config/Widget-Info.plist
         CODE_SIGN_ENTITLEMENTS: Config/Widget.entitlements
         ENABLE_HARDENED_RUNTIME: YES

@@ -14,7 +14,7 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
     private let model: UsageModel
     private let window: NSWindow
     private var cancellable: AnyCancellable?
-    private static let frameAutosave = "ClaudeUsageWindowFrame"
+    private static let frameAutosave = "ClaudarWindowFrame"
     private static let floatKey = "UsageWindowFloats"
 
     /// True once the user has a remembered/manually-set frame, so we stop
@@ -32,7 +32,7 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Claude Usage"
+        window.title = "Claudar"
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
@@ -62,9 +62,9 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
                 DispatchQueue.main.async {
                     guard let self else { return }
                     if let pct = model.menuBarUtilization {
-                        self.window.title = "Claude Usage — \(UsageFormat.percent(pct))"
+                        self.window.title = "Claudar — \(UsageFormat.percent(pct))"
                     } else {
-                        self.window.title = "Claude Usage"
+                        self.window.title = "Claudar"
                     }
                 }
             }

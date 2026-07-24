@@ -149,8 +149,8 @@ final class UsageModel: ObservableObject {
 
     /// Picks the access token to use, minimizing reads of Claude Code's Keychain
     /// item. Priority:
-    ///   1. A user-set long-lived token (`ClaudeUsage-token`).
-    ///   2. Our own cached copy of the CLI token (`ClaudeUsage-session`).
+    ///   1. A user-set long-lived token (`Claudar-token`).
+    ///   2. Our own cached copy of the CLI token (`Claudar-session`).
     ///   3. Claude Code's credentials — read once to bootstrap, then cached in (2).
     ///
     /// Why the cache: reading Claude Code's item is a *cross-app* Keychain access,
@@ -398,7 +398,7 @@ final class UsageModel: ObservableObject {
             }
         case 401, 403:
             if usingCustomToken {
-                errorMessage = "Long-lived token rejected — remove the ClaudeUsage-token Keychain item to fall back."
+                errorMessage = "Long-lived token rejected — remove the Claudar-token Keychain item to fall back."
             } else if Date().timeIntervalSince(lastCLIRefresh) > 300,
                       await Self.runCLIAuthRefresh() {
                 // Our cached token was rejected. The CLI owns this credential's
@@ -497,7 +497,7 @@ final class UsageModel: ObservableObject {
 
     /// Appends diagnostics to ~/Library/Logs (kept under ~100 KB).
     nonisolated static func appendLog(_ message: String) {
-        let path = NSHomeDirectory() + "/Library/Logs/ClaudeUsage-last-error.txt"
+        let path = NSHomeDirectory() + "/Library/Logs/Claudar-last-error.txt"
         var existing = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
         if existing.count > 100_000 { existing = String(existing.suffix(50_000)) }
         let text = existing + "[\(Date())] \(message)\n"

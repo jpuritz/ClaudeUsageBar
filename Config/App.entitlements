@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>$(TeamIdentifierPrefix)group.com.jpuritz.claude-usage</string>
+		<string>$(TeamIdentifierPrefix)group.com.jpuritz.claudar</string>
 	</array>
 </dict>
 </plist>

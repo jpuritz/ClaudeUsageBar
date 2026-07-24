@@ -95,7 +95,7 @@ final class CookieSignInController: NSObject, WKNavigationDelegate, NSWindowDele
         let alert = NSAlert()
         alert.messageText = "No-prompt mode is on"
         alert.informativeText =
-            "Signed in to claude.ai. Claude Usage now reads your usage without " +
+            "Signed in to claude.ai. Claudar now reads your usage without " +
             "password prompts. You can turn this off any time from the menu."
         alert.addButton(withTitle: "Done")
         alert.runModal()

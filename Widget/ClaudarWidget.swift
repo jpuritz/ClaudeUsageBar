@@ -100,7 +100,7 @@ struct EmptyState: View {
             Image(systemName: "chart.pie")
                 .font(.system(size: 20))
                 .foregroundStyle(.secondary)
-            Text("Open Claude Usage")
+            Text("Open Claudar")
                 .font(.system(size: 10, weight: .medium))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
@@ -166,7 +166,7 @@ struct LargeUsageView: View {
         if let headline = snapshot.headline {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Claude Usage")
+                    Text("Claudar")
                         .font(.system(size: 13, weight: .bold))
                     Spacer()
                     if let sub = snapshot.subscription, !sub.isEmpty {
@@ -207,7 +207,7 @@ struct LargeUsageView: View {
 
 // MARK: - Widget
 
-struct ClaudeUsageWidgetEntryView: View {
+struct ClaudarWidgetEntryView: View {
     @Environment(\.widgetFamily) var family
     var entry: UsageProvider.Entry
 
@@ -223,22 +223,22 @@ struct ClaudeUsageWidgetEntryView: View {
     }
 }
 
-struct ClaudeUsageWidget: Widget {
-    let kind = "ClaudeUsageWidget"
+struct ClaudarWidget: Widget {
+    let kind = "ClaudarWidget"
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: UsageProvider()) { entry in
-            ClaudeUsageWidgetEntryView(entry: entry)
+            ClaudarWidgetEntryView(entry: entry)
         }
-        .configurationDisplayName("Claude Usage")
+        .configurationDisplayName("Claudar")
         .description("Your Claude usage limits at a glance.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
 
 @main
-struct ClaudeUsageWidgetBundle: WidgetBundle {
+struct ClaudarWidgetBundle: WidgetBundle {
     var body: some Widget {
-        ClaudeUsageWidget()
+        ClaudarWidget()
     }
 }

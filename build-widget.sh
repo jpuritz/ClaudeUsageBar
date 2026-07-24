@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds Claude Usage.app *with* the WidgetKit widget extension.
+# Builds Claudar.app *with* the WidgetKit widget extension.
 # Requires Xcode and an Apple ID signed in (Xcode ▸ Settings ▸ Accounts) —
 # a free Apple ID is enough. The App Group entitlement that lets the app share
 # data with the widget cannot be ad-hoc signed.
@@ -14,9 +14,9 @@ cd "$(dirname "$0")"
 # (XXXXXXXXXX)") is the CERTIFICATE id, not the team id — signing with it fails.
 # The authoritative source is the team Xcode wrote into the project, or a
 # provisioning profile, so check those first.
-if [ -z "${DEVELOPMENT_TEAM:-}" ] && [ -f ClaudeUsage.xcodeproj/project.pbxproj ]; then
+if [ -z "${DEVELOPMENT_TEAM:-}" ] && [ -f Claudar.xcodeproj/project.pbxproj ]; then
     DEVELOPMENT_TEAM=$(sed -n 's/.*DEVELOPMENT_TEAM = \([A-Z0-9]\{10\}\);.*/\1/p' \
-        ClaudeUsage.xcodeproj/project.pbxproj | head -1 || true)
+        Claudar.xcodeproj/project.pbxproj | head -1 || true)
 fi
 if [ -z "${DEVELOPMENT_TEAM:-}" ]; then
     # Team id lives in the provisioning profile Xcode generated.
@@ -45,27 +45,28 @@ xcodegen generate
 
 # 3. Build.
 echo "Building…"
-xcodebuild -project ClaudeUsage.xcodeproj \
-    -scheme ClaudeUsage \
+xcodebuild -project Claudar.xcodeproj \
+    -scheme Claudar \
     -configuration Release \
     -derivedDataPath build/dd \
+    -allowProvisioningUpdates \
     DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
     build | tail -20
 
-APP="build/dd/Build/Products/Release/ClaudeUsage.app"
+APP="build/dd/Build/Products/Release/Claudar.app"
 [ -d "$APP" ] || { echo "Build produced no app at $APP" >&2; exit 1; }
 
 # 4. Install. The widget is registered from the installed copy, so it has to
 #    live somewhere stable — /Applications is where macOS looks first.
 echo "Installing to /Applications…"
-pkill -x ClaudeUsage 2>/dev/null || true
-rm -rf "/Applications/Claude Usage.app"
-cp -R "$APP" "/Applications/Claude Usage.app"
+pkill -x Claudar 2>/dev/null || true
+rm -rf "/Applications/Claudar.app"
+cp -R "$APP" "/Applications/Claudar.app"
 
 # 5. Nudge the widget system to notice the new extension.
-pluginkit -a "/Applications/Claude Usage.app/Contents/PlugIns/ClaudeUsageWidget.appex" 2>/dev/null || true
+pluginkit -a "/Applications/Claudar.app/Contents/PlugIns/ClaudarWidget.appex" 2>/dev/null || true
 killall chronod 2>/dev/null || true
 
-open "/Applications/Claude Usage.app"
+open "/Applications/Claudar.app"
 echo
-echo "Done. Add the widget: right-click the desktop ▸ Edit Widgets ▸ search “Claude Usage”."
+echo "Done. Add the widget: right-click the desktop ▸ Edit Widgets ▸ search “Claudar”."

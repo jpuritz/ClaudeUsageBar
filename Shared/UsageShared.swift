@@ -36,7 +36,7 @@ enum SharedStore {
         (Bundle.main.object(forInfoDictionaryKey: "AppGroupIdentifier") as? String)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .flatMap { $0.isEmpty ? nil : $0 }
-            ?? "group.com.jpuritz.claude-usage"
+            ?? "group.com.jpuritz.claudar"
     }
 
     private static var containerURL: URL? {

@@ -1,7 +1,7 @@
 import AppKit
 
 @main
-struct ClaudeUsageApp {
+struct ClaudarApp {
     @MainActor
     static func main() {
         let app = NSApplication.shared

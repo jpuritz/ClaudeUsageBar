@@ -1,4 +1,4 @@
-# Claude Usage — technical notes
+# Claudar — technical notes
 
 Internals, design decisions, and dead ends. For install and everyday use, see
 the [README](../README.md).
@@ -35,7 +35,7 @@ number of tokens (rate-limited to one call per 5 minutes). Only if that fails
 does it ask you to run `claude` → `/login`.
 
 **Reducing prompts.** The app caches the token it reads into its *own* Keychain
-item (`ClaudeUsage-session`) and reads from there on normal polls and on wake —
+item (`Claudar-session`) and reads from there on normal polls and on wake —
 reading your own item never prompts. It only touches Claude Code's item on first
 launch and after a 401. This removes the wake-from-short-sleep prompt, but not
 the renewal prompt (a long sleep expires the cached token, forcing a re-read of
@@ -43,7 +43,7 @@ Claude Code's freshly-rewritten item).
 
 ### Mode 2 — claude.ai session cookie
 
-Reads a claude.ai session cookie from `ClaudeUsage-cookie` — a Keychain item
+Reads a claude.ai session cookie from `Claudar-cookie` — a Keychain item
 this app **owns**, so reading it never prompts — and calls
 `claude.ai/api/organizations/<org>/usage`. That response carries the same limit
 fields (`five_hour`, `seven_day`, `extra_usage`, …), so the parser is shared.
@@ -89,7 +89,7 @@ Documented so nobody repeats them:
   network — returns `loggedIn: true` even when the stored token is long dead.
 - **`claude setup-token` long-lived tokens.** Scoped for the Anthropic API, not
   `/oauth/usage`, so they're rejected with 401. (A token placed in a
-  `ClaudeUsage-token` Keychain item is still preferred if present, but it isn't a
+  `Claudar-token` Keychain item is still preferred if present, but it isn't a
   working path today.)
 - **A paid Developer ID signature to stop the prompt.** The prompt is caused by
   the CLI rewriting its own Keychain item's ACL, independent of how this app is
@@ -148,16 +148,16 @@ First time only, before that script will succeed:
    works — no paid developer account.
 3. Generate and open the project, then pick your Team:
    ```sh
-   xcodegen generate && open ClaudeUsage.xcodeproj
+   xcodegen generate && open Claudar.xcodeproj
    ```
-   Select the **ClaudeUsage** target ▸ Signing & Capabilities ▸ **Team**, then do
-   the same for the **ClaudeUsageWidget** target. Xcode creates your development
+   Select the **Claudar** target ▸ Signing & Capabilities ▸ **Team**, then do
+   the same for the **ClaudarWidget** target. Xcode creates your development
    certificate at that moment.
 4. Run `./build-widget.sh`. From here on it's fully command-line — it finds your
    team automatically.
 
 Then add the widget: right-click the desktop ▸ **Edit Widgets** ▸ search
-"Claude Usage" ▸ drag out the size you want.
+"Claudar" ▸ drag out the size you want.
 
 The Apple ID is required because the app and widget are separate processes that
 share data through an **App Group**, and that entitlement can't be ad-hoc signed.
@@ -186,7 +186,7 @@ widget.
 
 ```sh
 ./build.sh              # ad-hoc signed, installs to ~/Applications
-./build.sh --package    # …and also produces build/ClaudeUsage-menubar.zip
+./build.sh --package    # …and also produces build/Claudar-menubar.zip
 ```
 
 This is what the published release contains.

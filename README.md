@@ -1,14 +1,14 @@
-# Claude Usage
+# Claudar
 
 > Watch your Claude usage limits from the macOS menu bar, a desktop widget, and
 > a status window — the same numbers as Claude Code's `/usage`, always in view.
 
-[![Downloads](https://img.shields.io/github/downloads/jpuritz/ClaudeUsageBar/total?label=downloads&color=brightgreen)](https://github.com/jpuritz/ClaudeUsageBar/releases)
-[![Latest release](https://img.shields.io/github/v/release/jpuritz/ClaudeUsageBar)](https://github.com/jpuritz/ClaudeUsageBar/releases/latest)
-[![License](https://img.shields.io/github/license/jpuritz/ClaudeUsageBar)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/jpuritz/Claudar/total?label=downloads&color=brightgreen)](https://github.com/jpuritz/Claudar/releases)
+[![Latest release](https://img.shields.io/github/v/release/jpuritz/Claudar)](https://github.com/jpuritz/Claudar/releases/latest)
+[![License](https://img.shields.io/github/license/jpuritz/Claudar)](LICENSE)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-lightgrey)
 
-![Opening Claude Usage: the ring icon in the menu bar, then the dropdown showing each limit with reset countdowns](docs/demo.gif)
+![Opening Claudar: the ring icon in the menu bar, then the dropdown showing each limit with reset countdowns](docs/demo.gif)
 
 > **Unofficial** — not affiliated with Anthropic. It reads *your* Claude sign-in
 > from your Keychain, talks only to Anthropic's servers, and has no telemetry.
@@ -21,15 +21,15 @@
 **Homebrew** (recommended):
 
 ```sh
-brew install --cask --no-quarantine jpuritz/tap/claude-usage
+brew install --cask --no-quarantine jpuritz/tap/claudar
 ```
 
-**Or** download `ClaudeUsage-menubar.zip` from the
-[latest release](https://github.com/jpuritz/ClaudeUsageBar/releases/latest),
-unzip, drag **Claude Usage.app** to `/Applications`, then run once:
+**Or** download `Claudar-menubar.zip` from the
+[latest release](https://github.com/jpuritz/Claudar/releases/latest),
+unzip, drag **Claudar.app** to `/Applications`, then run once:
 
 ```sh
-xattr -dr com.apple.quarantine "/Applications/Claude Usage.app"
+xattr -dr com.apple.quarantine "/Applications/Claudar.app"
 ```
 
 *(Both are needed because the app is ad-hoc signed; the flag / command tells
@@ -106,10 +106,10 @@ copying the Cookie header), or do it directly: copy the `Cookie:` header from
 claude.ai's DevTools (Network tab → the `usage` request) and run
 
 ```sh
-security add-generic-password -U -s "ClaudeUsage-cookie" -a "claude-usage" -w "$(pbpaste)"
+security add-generic-password -U -s "Claudar-cookie" -a "claudar" -w "$(pbpaste)"
 ```
 
-Remove it with `security delete-generic-password -s "ClaudeUsage-cookie"`.
+Remove it with `security delete-generic-password -s "Claudar-cookie"`.
 
 </details>
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sets up Claude Usage's no-prompt mode by saving your claude.ai session cookie
+# Sets up Claudar's no-prompt mode by saving your claude.ai session cookie
 # to a Keychain item the app owns. Double-click this file, or run it in Terminal.
 set -euo pipefail
 
@@ -25,7 +25,7 @@ if [[ "$COOKIE" != *sessionKey* ]]; then
   exit 1
 fi
 
-security add-generic-password -U -s "ClaudeUsage-cookie" -a "claude-usage" -w "$COOKIE"
+security add-generic-password -U -s "Claudar-cookie" -a "claudar" -w "$COOKIE"
 echo
-echo "✓ Saved. Claude Usage will switch to no-prompt mode within a minute."
-echo "  To undo: security delete-generic-password -s \"ClaudeUsage-cookie\""
+echo "✓ Saved. Claudar will switch to no-prompt mode within a minute."
+echo "  To undo: security delete-generic-password -s \"Claudar-cookie\""

@@ -2,7 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 
 private func hkLog(_ msg: String) {
-    let path = NSHomeDirectory() + "/Library/Logs/ClaudeUsage-last-error.txt"
+    let path = NSHomeDirectory() + "/Library/Logs/Claudar-last-error.txt"
     let line = "[\(Date())] hotkey: \(msg)\n"
     let existing = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
     try? (existing + line).write(toFile: path, atomically: true, encoding: .utf8)

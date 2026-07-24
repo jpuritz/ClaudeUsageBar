@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>Claude Usage</string>
+	<string>Claudar</string>
 	<key>CFBundleDisplayName</key>
-	<string>Claude Usage</string>
+	<string>Claudar</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -25,7 +25,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>AppGroupIdentifier</key>
-	<string>$(TeamIdentifierPrefix)group.com.jpuritz.claude-usage</string>
+	<string>$(TeamIdentifierPrefix)group.com.jpuritz.claudar</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT Licensed</string>
 </dict>

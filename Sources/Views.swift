@@ -56,7 +56,7 @@ struct UsagePanelView: View {
             // the whole row is dropped and the badge moves to the footer.
             if showsTitle {
                 HStack {
-                    Text("Claude Usage")
+                    Text("Claudar")
                         .font(.system(size: 12, weight: .bold))
                     Spacer()
                     subscriptionBadge
