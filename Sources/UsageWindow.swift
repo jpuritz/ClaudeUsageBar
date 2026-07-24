@@ -102,29 +102,25 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
     private func sizeToFitContent() {
         let width = window.contentView?.bounds.width ?? 300
 
-        // Mirrors UsagePanelView: 14pt padding, 10pt VStack spacing, and per-row
-        // metrics from LimitRow (12pt label, 6pt bar, optional 10pt reset line,
-        // 3pt internal spacing).
-        let padding: CGFloat = 14 * 2
-        let stackSpacing: CGFloat = 10
+        // Every number here comes from PanelMetrics, which UsagePanelView lays
+        // itself out with — so the two can't drift.
+        let padding = PanelMetrics.padding * 2
         var blocks: [CGFloat] = []
 
         if model.limits.isEmpty && model.errorMessage == nil {
-            blocks.append(16)                       // "Loading…"
+            blocks.append(PanelMetrics.loadingHeight)
         }
         for limit in model.limits {
-            // label(16) + 3 + bar(6) [+ 3 + reset(13)]
-            blocks.append(limit.resetsAt != nil ? 41 : 25)
+            blocks.append(PanelMetrics.rowHeight(hasReset: limit.resetsAt != nil))
         }
         if model.errorMessage != nil {
-            blocks.append(30)                       // error text, may wrap to 2 lines
+            blocks.append(PanelMetrics.errorHeight)
         }
-        blocks.append(18)                           // footer: "Updated …" + plan badge
+        blocks.append(PanelMetrics.footerHeight)    // "Updated …" + plan badge
 
         let content = blocks.reduce(0, +)
-            + stackSpacing * CGFloat(max(0, blocks.count - 1))
-        // A little breathing room below the last row.
-        let desired = padding + content + 12
+            + PanelMetrics.stackSpacing * CGFloat(max(0, blocks.count - 1))
+        let desired = padding + content + PanelMetrics.bottomBreathingRoom
 
         // Guard rails: never smaller than minSize, never a full-screen window.
         let ceiling = min(560, (NSScreen.main?.visibleFrame.height ?? 900) - 80)

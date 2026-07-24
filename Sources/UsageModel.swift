@@ -83,15 +83,6 @@ final class UsageModel: ObservableObject {
     private static let orgIDKey = "ClaudeOrgID"
     private static let planKey = "ClaudeOrgPlan"
 
-    /// claude.ai reports the plan as an org capability, e.g. ["claude_pro", "chat"].
-    nonisolated static func planLabel(from capabilities: [String]) -> String? {
-        if capabilities.contains("claude_max") { return "Max" }
-        if capabilities.contains("claude_pro") { return "Pro" }
-        if capabilities.contains("claude_team") { return "Team" }
-        if capabilities.contains("claude_enterprise") { return "Enterprise" }
-        return nil
-    }
-
     nonisolated static func browserRequest(_ url: URL, cookie: String) -> URLRequest {
         var req = URLRequest(url: url)
         req.setValue(cookie, forHTTPHeaderField: "Cookie")
@@ -101,18 +92,6 @@ final class UsageModel: ObservableObject {
         req.setValue("https://claude.ai/settings/usage", forHTTPHeaderField: "Referer")
         req.timeoutInterval = 25
         return req
-    }
-
-    /// The cookie carries `lastActiveOrg`, so we can usually skip a lookup.
-    nonisolated static func orgID(fromCookie cookie: String) -> String? {
-        for piece in cookie.split(separator: ";") {
-            let kv = piece.trimmingCharacters(in: .whitespaces)
-            guard kv.hasPrefix("lastActiveOrg=") else { continue }
-            let raw = String(kv.dropFirst("lastActiveOrg=".count))
-            let value = raw.removingPercentEncoding ?? raw
-            if !value.isEmpty { return value }
-        }
-        return nil
     }
 
     /// Resolves (and caches) the organization UUID and plan label. Both are
@@ -132,15 +111,15 @@ final class UsageModel: ObservableObject {
            (resp as? HTTPURLResponse)?.statusCode == 200,
            let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
            let org = arr.first {
-            let uuid = (org["uuid"] as? String) ?? cachedOrg ?? Self.orgID(fromCookie: cookie)
-            let plan = Self.planLabel(from: org["capabilities"] as? [String] ?? [])
+            let uuid = (org["uuid"] as? String) ?? cachedOrg ?? UsageParser.orgID(fromCookie: cookie)
+            let plan = UsageParser.planLabel(from: org["capabilities"] as? [String] ?? [])
             if let uuid { UserDefaults.standard.set(uuid, forKey: Self.orgIDKey) }
             if let plan { UserDefaults.standard.set(plan, forKey: Self.planKey) }
             if let uuid { return (uuid, plan ?? cachedPlan) }
         }
 
         // Lookup failed — fall back to the org embedded in the cookie.
-        if let org = cachedOrg ?? Self.orgID(fromCookie: cookie), !org.isEmpty {
+        if let org = cachedOrg ?? UsageParser.orgID(fromCookie: cookie), !org.isEmpty {
             UserDefaults.standard.set(org, forKey: Self.orgIDKey)
             return (org, cachedPlan)
         }
@@ -243,6 +222,42 @@ final class UsageModel: ObservableObject {
         }
     }
 
+    // MARK: - Shared response handling
+    //
+    // Both transports get the same treatment on success and on 429, so the logic
+    // lives here rather than being mirrored in each fetch path.
+
+    /// Commits a successful payload: publishes it, clears backoff, and lets the
+    /// alert engine compare it against the previous reading.
+    private func applySuccess(_ body: Data) {
+        let parsed = UsageParser.limits(from: body)
+        guard !parsed.isEmpty else {
+            errorMessage = "Usage response had no limit data."
+            return
+        }
+        let previous = limits
+        limits = parsed
+        lastUpdated = Date()
+        errorMessage = nil
+        consecutive429s = 0
+        nextAttemptAllowed = .distantPast
+        AlertEngine.shared.evaluate(previous: previous, current: parsed)
+        publishToWidget(parsed)
+    }
+
+    /// Exponential backoff: 5, 10, 20, 40, 60, 60… minutes, or the server's
+    /// `Retry-After` if that's longer.
+    private func applyBackoff(retryAfter: Double?, source: String) {
+        consecutive429s += 1
+        var delay = min(3600.0, 300.0 * pow(2, Double(consecutive429s - 1)))
+        if let retryAfter { delay = max(delay, retryAfter) }
+        nextAttemptAllowed = Date(timeIntervalSinceNow: delay)
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        errorMessage = "Rate limited (\(source)) — retrying after \(f.string(from: nextAttemptAllowed))."
+    }
+
     private func fetch() async {
         // Cookie mode takes priority: it reads only Keychain items this app owns,
         // so it never triggers an authorization prompt.
@@ -278,21 +293,9 @@ final class UsageModel: ObservableObject {
 
         switch http.statusCode {
         case 200:
-            let parsed = Self.parseLimits(from: data)
-            if parsed.isEmpty {
-                errorMessage = "Usage response had no limit data."
-            } else {
-                let previous = limits
-                limits = parsed
-                lastUpdated = Date()
-                errorMessage = nil
-                consecutive429s = 0
-                nextAttemptAllowed = .distantPast
-                AlertEngine.shared.evaluate(previous: previous, current: parsed)
-                publishToWidget(parsed)
-            }
+            applySuccess(data)
         case 401:
-            errorMessage = "claude.ai session expired — re-copy your Cookie (see README)."
+            errorMessage = "claude.ai session expired — sign in again from No-Prompt Mode."
         case 403:
             // Cloudflare serves an HTML challenge when cf_clearance goes stale.
             let body = String(data: data.prefix(200), encoding: .utf8) ?? ""
@@ -301,14 +304,8 @@ final class UsageModel: ObservableObject {
                 : "claude.ai refused the request (403)."
             Self.appendLog("cookie mode HTTP 403")
         case 429:
-            consecutive429s += 1
-            var delay = min(3600.0, 300.0 * pow(2, Double(consecutive429s - 1)))
-            if let ra = http.value(forHTTPHeaderField: "Retry-After"), let s = Double(ra) {
-                delay = max(delay, s)
-            }
-            nextAttemptAllowed = Date(timeIntervalSinceNow: delay)
-            let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none
-            errorMessage = "Rate limited — retrying after \(f.string(from: nextAttemptAllowed))."
+            let ra = http.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init)
+            applyBackoff(retryAfter: ra, source: "claude.ai")
         default:
             errorMessage = "claude.ai returned HTTP \(http.statusCode)."
             Self.appendLog("cookie mode HTTP \(http.statusCode)")
@@ -383,19 +380,7 @@ final class UsageModel: ObservableObject {
 
         switch status {
         case 200:
-            let parsed = Self.parseLimits(from: body)
-            if parsed.isEmpty {
-                errorMessage = "Usage response had no limit data."
-            } else {
-                let previous = limits
-                limits = parsed
-                lastUpdated = Date()
-                errorMessage = nil
-                consecutive429s = 0
-                nextAttemptAllowed = .distantPast
-                AlertEngine.shared.evaluate(previous: previous, current: parsed)
-                publishToWidget(parsed)
-            }
+            applySuccess(body)
         case 401, 403:
             if usingCustomToken {
                 errorMessage = "Long-lived token rejected — remove the Claudar-token Keychain item to fall back."
@@ -407,21 +392,19 @@ final class UsageModel: ObservableObject {
                 // stale cache so the retry re-reads and re-caches the fresh token.
                 KeychainReader.clearSession()
                 Self.appendLog("401 → triggered CLI to renew credential.")
-                errorMessage = "Refreshing sign-in…"
+                // Retry inline rather than via refresh(): we are still inside the
+                // in-flight fetch, so refresh() would be dropped by its own
+                // re-entrancy guard and the recovery would wait for the next poll.
+                // Stamping lastCLIRefresh *before* recursing bounds this to one
+                // extra attempt — a second 401 fails the 5-minute check and falls
+                // through to the message below.
                 lastCLIRefresh = Date()
-                refresh(force: true)   // retry immediately with the new token
+                await fetchViaBearer()
             } else {
                 errorMessage = "Sign-in expired — run `claude` in Terminal, then /login."
             }
         case 429:
-            consecutive429s += 1
-            // Exponential backoff: 5, 10, 20, 40, 60, 60… minutes,
-            // or the server's Retry-After if longer.
-            var delay = min(3600.0, 300.0 * pow(2, Double(consecutive429s - 1)))
-            if let retryAfter { delay = max(delay, retryAfter) }
-            nextAttemptAllowed = Date(timeIntervalSinceNow: delay)
-            let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none
-            errorMessage = "Rate limited (via \(transport)) — retrying after \(f.string(from: nextAttemptAllowed))."
+            applyBackoff(retryAfter: retryAfter, source: "via \(transport)")
             let raText = retryAfter.map { String(Int($0)) } ?? "none"
             let bodyText = String(data: body.prefix(500), encoding: .utf8) ?? ""
             Self.appendLog("HTTP 429 via \(transport), retry-after header: \(raText)\n\(bodyText)")
@@ -504,63 +487,4 @@ final class UsageModel: ObservableObject {
         try? text.write(toFile: path, atomically: true, encoding: .utf8)
     }
 
-    // MARK: - Parsing
-
-    private static let labelMap: [String: String] = [
-        "five_hour": "Session (5 h)",
-        "seven_day": "Weekly · all models",
-        "seven_day_sonnet": "Weekly · Sonnet",
-        "seven_day_opus": "Weekly · Opus",
-        "seven_day_oauth_apps": "Weekly · OAuth apps",
-        "extra_usage": "Extra usage",
-    ]
-
-    private static let preferredOrder = [
-        "five_hour", "seven_day", "seven_day_sonnet", "seven_day_opus",
-        "seven_day_oauth_apps", "extra_usage",
-    ]
-
-    /// Parses the /api/oauth/usage payload defensively: any top-level (or one level
-    /// nested) object containing a numeric "utilization" is treated as a limit.
-    static func parseLimits(from data: Data) -> [UsageLimit] {
-        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
-            return []
-        }
-        var found: [String: UsageLimit] = [:]
-
-        func scan(_ dict: [String: Any]) {
-            for (key, value) in dict {
-                guard let entry = value as? [String: Any] else { continue }
-                if let num = entry["utilization"] as? NSNumber {
-                    let label = labelMap[key] ?? key
-                        .replacingOccurrences(of: "_", with: " ")
-                        .capitalized
-                    found[key] = UsageLimit(
-                        id: key,
-                        label: label,
-                        utilization: min(max(num.doubleValue, 0), 100),
-                        resetsAt: (entry["resets_at"] as? String).flatMap(parseISODate)
-                    )
-                } else {
-                    scan(entry)
-                }
-            }
-        }
-        scan(root)
-
-        var ordered: [UsageLimit] = []
-        for key in preferredOrder {
-            if let l = found.removeValue(forKey: key) { ordered.append(l) }
-        }
-        ordered.append(contentsOf: found.values.sorted { $0.id < $1.id })
-        return ordered
-    }
-
-    static func parseISODate(_ s: String) -> Date? {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: s) { return d }
-        f.formatOptions = [.withInternetDateTime]
-        return f.date(from: s)
-    }
 }

@@ -1,5 +1,10 @@
 build/
 *.app
+
+# SwiftPM (test-only package — see Package.swift)
+.build/
+.swiftpm/
+Package.resolved
 .DS_Store
 *.xcuserstate
 

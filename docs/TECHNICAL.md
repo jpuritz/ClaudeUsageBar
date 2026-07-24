@@ -103,8 +103,9 @@ Documented so nobody repeats them:
 ```
 Sources/   host app (menu bar, window, fetching, notifications, status)
 Widget/    WidgetKit extension
-Shared/    model + formatting compiled into BOTH targets
+Shared/    model, parsing, and formatting compiled into BOTH targets
 Config/    Info.plists and entitlements
+Tests/     unit tests over Shared/ (SwiftPM; not part of the release build)
 ```
 
 The host app is deliberately **not sandboxed** — it reads the Claude Code
@@ -120,9 +121,24 @@ menu bar in practice — every widget view shows an "updated Xm ago" stamp rathe
 than implying the number is live. The menu bar, drawn directly by the app,
 tracks the full poll cadence.
 
+Clicking the widget opens `claudar://window`, which the app handles by showing
+the usage window. The scheme is registered in both Info.plists and the URL is
+defined once in `Shared/` (`ClaudarURL`), so the widget and the handler cannot
+disagree. Without it a click would be a dead end — the app is an `LSUIElement`
+accessory, so simply activating it puts nothing on screen.
+
 Other details:
 
-- Colors: green < 50%, yellow < 75%, orange < 90%, red ≥ 90%.
+- Colors: green < 50%, yellow < 75%, orange < 90%, red ≥ 90%. Defined once, in
+  `Severity` (`Shared/UsageShared.swift`), which vends both a SwiftUI `Color`
+  and an `NSColor` from the same RGB triple — the menu bar ring and the panel
+  bars used to carry separate palettes and never quite matched.
+- Notification state (which thresholds have fired, whether a pace warning went
+  out) is persisted per limit, keyed on the limit's `resets_at`. A window the
+  app has no record of seeds its already-crossed thresholds *without* notifying:
+  you cannot cross a line the app never watched you cross. That is what stops a
+  relaunch at 85% — every login, with Launch at Login on — from re-announcing
+  80%. A genuine reset changes `resets_at` and clears the state.
 - The menu bar and widget headline show the **5-hour session** limit (the one
   that bites mid-session), falling back to the highest limit if absent. The menu,
   window, and medium/large widgets list every limit.
@@ -190,3 +206,20 @@ widget.
 ```
 
 This is what the published release contains.
+
+## Tests
+
+```sh
+swift test
+```
+
+`Package.swift` exists **only** for this: it exposes `Shared/` as a library so
+the pure code can be tested without launching an app. It is not part of either
+build path above — XcodeGen and `build.sh` compile `Shared/*.swift` straight
+into their targets.
+
+The coverage is deliberately narrow, aimed at the code most exposed to somebody
+else's decisions: the usage parser (undocumented payload, could change shape
+without warning), the org/plan extraction from a cookie, the reset/staleness
+formatting, and the severity thresholds. Networking, Keychain access, and the
+AppKit surface are not covered — they need a signed, running app.

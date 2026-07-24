@@ -13,8 +13,10 @@
 > **Unofficial** — not affiliated with Anthropic. It reads *your* Claude sign-in
 > from your Keychain, talks only to Anthropic's servers, and has no telemetry.
 
-**Requires:** macOS 14+, an active Claude subscription, and the
-[Claude Code CLI](https://code.claude.com) signed in.
+**Requires:** macOS 14+, an active Claude subscription, and a way to sign in —
+either the [Claude Code CLI](https://code.claude.com) (nothing to set up), or a
+one-time claude.ai login via [No-Prompt Mode](#sign-in-and-the-password-prompt)
+if you don't use the CLI.
 
 ## Install
 
@@ -36,7 +38,8 @@ xattr -dr com.apple.quarantine "/Applications/Claudar.app"
 Gatekeeper to trust it.)*
 
 **On first launch**, macOS asks to access *Claude Code-credentials* — click
-**Always Allow**. That's how the app reads your usage.
+**Always Allow**. That's how the app reads your usage. No CLI? Skip that prompt
+and use **No-Prompt Mode → Sign In to claude.ai…** from the menu instead.
 
 > **Want the desktop widget?** The download and Homebrew builds are the **menu
 > bar + window** version. The widget has to be built from source (free, needs

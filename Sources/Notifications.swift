@@ -104,10 +104,35 @@ final class AlertEngine {
     static let shared = AlertEngine()
 
     private let thresholds: [Double] = [80, 95]
-    private var thresholdFired: [String: Set<Int>] = [:]
-    private var paceFired: Set<String> = []
     /// Recent (time, utilization) samples per limit, for burn-rate estimation.
+    /// Deliberately in-memory: a burn rate measured before a relaunch says
+    /// nothing useful about the rate after it.
     private var history: [String: [(Date, Double)]] = [:]
+
+    /// Which alerts have already fired for one limit within one reset window.
+    ///
+    /// Persisted, because it is the only thing standing between the user and a
+    /// duplicate "at 80%" banner every time the app launches — and with Launch
+    /// at Login on, that means every login.
+    private struct AlertState: Codable {
+        /// Identifies the reset window this state describes, so a genuine reset
+        /// invalidates it. 0 for limits the API reports without a reset time.
+        var window: Double
+        var fired: Set<Int>
+        var paced: Bool
+    }
+
+    private static func stateKey(_ id: String) -> String { "AlertState-\(id)" }
+
+    private static func loadState(_ id: String) -> AlertState? {
+        guard let data = UserDefaults.standard.data(forKey: stateKey(id)) else { return nil }
+        return try? JSONDecoder().decode(AlertState.self, from: data)
+    }
+
+    private static func saveState(_ state: AlertState, for id: String) {
+        guard let data = try? JSONEncoder().encode(state) else { return }
+        UserDefaults.standard.set(data, forKey: stateKey(id))
+    }
 
     func evaluate(previous: [UsageLimit], current: [UsageLimit]) {
         let prevByID = Dictionary(uniqueKeysWithValues: previous.map { ($0.id, $0) })
@@ -115,11 +140,29 @@ final class AlertEngine {
 
         for limit in current {
             let old = prevByID[limit.id]?.utilization
+            let window = limit.resetsAt?.timeIntervalSince1970 ?? 0
+            var state = Self.loadState(limit.id)
 
-            // A big downward move means the window reset: clear alert state.
-            if let old, limit.utilization < old - 10 {
-                thresholdFired[limit.id] = []
-                paceFired.remove(limit.id)
+            // An unknown window means we were not watching when this one started,
+            // so seed the already-crossed thresholds as "fired" WITHOUT notifying.
+            // You cannot cross a line the app never saw you cross — this is what
+            // stops a relaunch at 85% from re-announcing 80%. On a live reset the
+            // utilization has just dropped to ~0, so this seeds nothing.
+            if state == nil || state!.window != window {
+                state = AlertState(
+                    window: window,
+                    fired: Set(thresholds.filter { limit.utilization >= $0 }.map(Int.init)),
+                    paced: false
+                )
+                history[limit.id] = []
+            }
+            var s = state!
+
+            // Fallback for limits reported without a reset time: a big downward
+            // move is the only signal that the window rolled over.
+            if window == 0, let old, limit.utilization < old - 10 {
+                s.fired = []
+                s.paced = false
                 history[limit.id] = []
             }
 
@@ -128,16 +171,18 @@ final class AlertEngine {
                 now.timeIntervalSince($0.0) < 2 * 3600
             }
 
-            checkThresholds(limit)
+            checkThresholds(limit, state: &s)
             updateResetSchedule(limit)
-            checkPace(limit, now: now)
+            checkPace(limit, now: now, state: &s)
+
+            Self.saveState(s, for: limit.id)
         }
     }
 
-    private func checkThresholds(_ limit: UsageLimit) {
+    private func checkThresholds(_ limit: UsageLimit, state: inout AlertState) {
         guard Prefs.notifyThresholds else { return }
         for t in thresholds where limit.utilization >= t {
-            if thresholdFired[limit.id, default: []].insert(Int(t)).inserted {
+            if state.fired.insert(Int(t)).inserted {
                 let resetInfo = UsageFormat.resetString(limit.resetsAt)
                 NotificationManager.shared.post(
                     id: "threshold-\(limit.id)-\(Int(t))-\(Int(Date().timeIntervalSince1970))",
@@ -166,9 +211,9 @@ final class AlertEngine {
 
     /// Burn-rate projection over the last hour of samples: warn once per window
     /// if 100 % will arrive before the reset does (and within the next hour).
-    private func checkPace(_ limit: UsageLimit, now: Date) {
+    private func checkPace(_ limit: UsageLimit, now: Date, state: inout AlertState) {
         guard Prefs.notifyPace,
-              !paceFired.contains(limit.id),
+              !state.paced,
               limit.utilization >= 50, limit.utilization < 100,
               let samples = history[limit.id]
         else { return }
@@ -186,7 +231,7 @@ final class AlertEngine {
         let hitTime = now.addingTimeInterval(secondsTo100)
         if let resets = limit.resetsAt, hitTime >= resets { return } // reset arrives first
 
-        paceFired.insert(limit.id)
+        state.paced = true
         let f = DateFormatter()
         f.timeStyle = .short
         f.dateStyle = .none

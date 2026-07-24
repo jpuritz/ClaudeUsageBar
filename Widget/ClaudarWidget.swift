@@ -227,6 +227,9 @@ struct ClaudarWidgetEntryView: View {
             }
         }
         .containerBackground(.fill.tertiary, for: .widget)
+        // Without this a click does nothing visible: the host app is an accessory
+        // with no Dock icon, so merely activating it shows the user no window.
+        .widgetURL(ClaudarURL.window)
     }
 }
 

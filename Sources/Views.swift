@@ -1,11 +1,37 @@
 import SwiftUI
 import AppKit
 
+/// Layout constants for `UsagePanelView`, in one place because
+/// `UsageWindowController.sizeToFitContent()` has to compute the panel's height
+/// arithmetically (AppKit's measurement APIs over-report badly for this layout —
+/// see the note there). Two copies of these numbers would silently drift.
+enum PanelMetrics {
+    static let padding: CGFloat = 14
+    static let compactPadding: CGFloat = 12
+    static let stackSpacing: CGFloat = 10
+
+    // LimitRow internals.
+    static let rowSpacing: CGFloat = 3
+    static let labelHeight: CGFloat = 16     // a 12 pt label, rendered
+    static let barHeight: CGFloat = 6
+    static let resetHeight: CGFloat = 13     // a 10 pt line, rendered
+
+    static let loadingHeight: CGFloat = 16
+    static let errorHeight: CGFloat = 30     // allows for a second wrapped line
+    static let footerHeight: CGFloat = 18
+    static let bottomBreathingRoom: CGFloat = 12
+
+    static func rowHeight(hasReset: Bool) -> CGFloat {
+        labelHeight + rowSpacing + barHeight
+            + (hasReset ? rowSpacing + resetHeight : 0)
+    }
+}
+
 struct LimitRow: View {
     let limit: UsageLimit
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: PanelMetrics.rowSpacing) {
             HStack(alignment: .firstTextBaseline) {
                 Text(limit.label)
                     .font(.system(size: 12, weight: .medium))
@@ -22,7 +48,7 @@ struct LimitRow: View {
                         .frame(width: max(4, geo.size.width * limit.utilization / 100))
                 }
             }
-            .frame(height: 6)
+            .frame(height: PanelMetrics.barHeight)
             if limit.resetsAt != nil {
                 Text(UsageFormat.resetString(limit.resetsAt))
                     .font(.system(size: 10))
@@ -51,7 +77,7 @@ struct UsagePanelView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: PanelMetrics.stackSpacing) {
             // Without the title there's nothing to balance the badge against, so
             // the whole row is dropped and the badge moves to the footer.
             if showsTitle {
@@ -88,7 +114,7 @@ struct UsagePanelView: View {
                 }
             }
         }
-        .padding(compact ? 12 : 14)
+        .padding(compact ? PanelMetrics.compactPadding : PanelMetrics.padding)
         .frame(width: fixedWidth, alignment: .leading)
         .frame(maxWidth: fixedWidth == nil ? .infinity : nil, alignment: .leading)
     }

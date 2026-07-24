@@ -16,25 +16,21 @@ enum ServiceHealth: String {
 
     var isOperational: Bool { self == .none }
 
-    var color: Color {
+    /// Reuses the usage palette so a yellow incident dot is the same yellow as a
+    /// 60%-full bar. `unknown` has no severity — it means "not measured yet".
+    var severity: Severity? {
         switch self {
-        case .none: return Color(red: 0.22, green: 0.72, blue: 0.45)
-        case .minor, .maintenance: return Color(red: 0.95, green: 0.77, blue: 0.06)
-        case .major: return Color(red: 0.96, green: 0.55, blue: 0.14)
-        case .critical: return Color(red: 0.91, green: 0.26, blue: 0.21)
-        case .unknown: return Color.secondary
+        case .none: return .ok
+        case .minor, .maintenance: return .notice
+        case .major: return .warning
+        case .critical: return .critical
+        case .unknown: return nil
         }
     }
 
-    var nsColor: NSColor {
-        switch self {
-        case .none: return .systemGreen
-        case .minor, .maintenance: return .systemYellow
-        case .major: return .systemOrange
-        case .critical: return .systemRed
-        case .unknown: return .secondaryLabelColor
-        }
-    }
+    var color: Color { severity?.color ?? Color.secondary }
+
+    var nsColor: NSColor { severity?.nsColor ?? .secondaryLabelColor }
 }
 
 struct ServiceComponent: Identifiable {

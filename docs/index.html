@@ -4,8 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Claudar — radar for your Claude limits</title>
+<meta name="description" content="A free, open-source macOS menu bar app for your Claude usage limits. The same numbers as Claude Code's /usage, tracked live from the menu bar, a desktop widget, and a status window.">
+<link rel="canonical" href="https://claudarapp.com/">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191916" media="(prefers-color-scheme: dark)">
+
+<!-- Link previews (Slack, iMessage, social). og:image must be an absolute URL. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Claudar">
+<meta property="og:url" content="https://claudarapp.com/">
+<meta property="og:title" content="Claudar — radar for your Claude limits">
+<meta property="og:description" content="Track your Claude usage limits live from the macOS menu bar, a desktop widget, and a status window. Free, open source, no telemetry.">
+<meta property="og:image" content="https://claudarapp.com/og-card.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Claudar's menu bar dropdown showing session, weekly, and extra usage meters, beside the words “Radar for your Claude limits.”">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Claudar — radar for your Claude limits">
+<meta name="twitter:description" content="Track your Claude usage limits live from the macOS menu bar, a desktop widget, and a status window. Free, open source, no telemetry.">
+<meta name="twitter:image" content="https://claudarapp.com/og-card.png">
 <style>
   :root {
     --ink: #22211F;
@@ -14,16 +34,13 @@
     --paper-2: #F2F0EA;
     --line: #E2DFD7;
     --green: #3D7B52;
-    --green-dim: #6FA383;
-    --green-soft: #E7EFE9;
-    --orange: #C97F3E;
-    --blue: #4A7FB5;
     --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
     --serif: Georgia, "Times New Roman", serif;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
   body {
     background: var(--paper); color: var(--ink);
     font-family: var(--serif); font-size: 17px; line-height: 1.6;
@@ -156,8 +173,7 @@
   @media (prefers-color-scheme: dark){
     :root {
       --ink:#EDEBE4; --ink-soft: rgba(237,235,228,.62); --paper:#191916; --paper-2:#242420;
-      --line: rgba(237,235,228,.16); --green:#7FB98E; --green-dim:#5E8A6C;
-      --green-soft: rgba(127,185,142,.13); --orange:#DE9255; --blue:#5E9FE8;
+      --line: rgba(237,235,228,.16); --green:#7FB98E;
     }
     .shot-hero, .gallery img { filter: drop-shadow(0 18px 36px rgba(0,0,0,.5)); }
     .code-cta, pre { background:#000; }
@@ -184,12 +200,12 @@
     <p class="lede">The same numbers as Claude Code's <code>/usage</code>, tracked live from your macOS menu bar, a desktop widget, and a status window. You'll see the reset coming before you hit it.</p>
     <div class="cta-row">
       <div class="code-cta">
-        <span><span class="p">$</span> brew install --cask jpuritz/tap/claudar</span>
-        <button class="copy-btn" onclick="navigator.clipboard&&navigator.clipboard.writeText('brew install --cask --no-quarantine jpuritz/tap/claudar');this.textContent='copied'">copy</button>
+        <span><span class="p">$</span> brew install --cask --no-quarantine jpuritz/tap/claudar</span>
+        <button class="copy-btn" data-copy="brew install --cask --no-quarantine jpuritz/tap/claudar">copy</button>
       </div>
       <a class="alt-link" href="https://github.com/jpuritz/Claudar/releases/latest">or download the .zip</a>
     </div>
-    <p class="fine"><b>Unofficial:</b> not affiliated with Anthropic. Claudar reads <em>your</em> Claude sign-in from your Keychain, talks only to Anthropic's servers, and has no telemetry. Needs macOS 14+, an active Claude subscription, and the <a href="https://code.claude.com">Claude Code CLI</a> signed in. MIT licensed.</p>
+    <p class="fine"><b>Unofficial:</b> not affiliated with Anthropic. Claudar reads <em>your</em> Claude sign-in from your Keychain, talks only to Anthropic's servers, and has no telemetry. Needs macOS 14+, an active Claude subscription, and either the <a href="https://code.claude.com">Claude Code CLI</a> signed in or a one-time claude.ai sign-in. MIT licensed.</p>
   </div>
 </div>
 
@@ -290,7 +306,7 @@
         <p>Grab <code>Claudar-menubar.zip</code> from the <a href="https://github.com/jpuritz/Claudar/releases/latest">latest release</a>, unzip, drag <b>Claudar.app</b> to <code>/Applications</code>, then run the command above once.</p>
       </div>
     </div>
-    <p class="aside"><b>On first launch,</b> macOS asks to access <em>Claude Code-credentials</em>; click <b>Always Allow</b>. That's how the app reads your usage. And if you want the desktop widget: the download and Homebrew builds are the menu bar + window version, so the widget builds from source (free, needs Xcode; see the <a href="https://github.com/jpuritz/Claudar/blob/main/docs/TECHNICAL.md#building-from-source">technical notes</a>).</p>
+    <p class="aside"><b>On first launch,</b> macOS asks to access <em>Claude Code-credentials</em>; click <b>Always Allow</b>. That's how the app reads your usage — or skip it entirely with <b>No-Prompt Mode</b> if you don't use the CLI. And if you want the desktop widget: the download and Homebrew builds are the menu bar + window version, so the widget builds from source (free, needs Xcode; see the <a href="https://github.com/jpuritz/Claudar/blob/main/docs/TECHNICAL.md#building-from-source">technical notes</a>).</p>
   </div>
 </section>
 
@@ -325,6 +341,24 @@
     <p class="foot-quip">No telemetry. The only thing on this radar is your usage.</p>
   </div>
 </footer>
+
+<script>
+// Only claim "copied" if the write actually succeeded, and put the label back so
+// the button doesn't look permanently spent.
+document.querySelectorAll('.copy-btn').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var text = btn.dataset.copy;
+    if (!navigator.clipboard) { btn.textContent = 'press ⌘C'; return; }
+    navigator.clipboard.writeText(text).then(function () {
+      btn.textContent = 'copied';
+    }, function () {
+      btn.textContent = 'copy failed';
+    }).finally(function () {
+      setTimeout(function () { btn.textContent = 'copy'; }, 2000);
+    });
+  });
+});
+</script>
 
 </body>
 </html>

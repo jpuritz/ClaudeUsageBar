@@ -24,6 +24,19 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.jpuritz.claudar.deeplink</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>claudar</string>
+			</array>
+		</dict>
+	</array>
 	<key>AppGroupIdentifier</key>
 	<string>$(TeamIdentifierPrefix)group.com.jpuritz.claudar</string>
 	<key>NSHumanReadableCopyright</key>

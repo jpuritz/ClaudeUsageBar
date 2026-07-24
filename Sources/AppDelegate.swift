@@ -76,6 +76,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if Prefs.hotkeyEnabled { enableHotkey(true) }
     }
 
+    /// Handles `claudar://window`, which is what the desktop widget opens when
+    /// clicked. Without this the widget is a dead end: the app is an accessory
+    /// with no Dock icon, so activating it shows the user nothing.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard urls.contains(where: { $0.scheme == ClaudarURL.scheme }) else { return }
+        usageWindow.show()
+        UserDefaults.standard.set(true, forKey: Self.windowVisibleKey)
+        model.refresh(force: true)
+    }
+
     /// (Re)starts the usage poll timer at the user's chosen interval.
     private func startPollTimer() {
         timer?.invalidate()
@@ -138,13 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             track.stroke()
 
             if fraction > 0.005 {
-                let color: NSColor
-                switch fraction * 100 {
-                case ..<50: color = NSColor.systemGreen
-                case ..<75: color = NSColor.systemYellow
-                case ..<90: color = NSColor.systemOrange
-                default: color = NSColor.systemRed
-                }
+                let color = Severity.forPercent(fraction * 100).nsColor
                 let arc = NSBezierPath()
                 // Start at 12 o'clock, sweep clockwise.
                 arc.appendArc(

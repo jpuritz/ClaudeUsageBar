@@ -1,5 +1,8 @@
 import Foundation
 import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#endif
 
 // MARK: - Model (shared by the app and the widget extension)
 
@@ -65,12 +68,75 @@ enum SharedStore {
     }
 }
 
+// MARK: - Deep links
+
+enum ClaudarURL {
+    static let scheme = "claudar"
+    /// Opened when the user clicks the widget — brings up the usage window.
+    static let window = URL(string: "\(scheme)://window")!
+}
+
+// MARK: - Severity
+
+/// The single source of truth for "how alarming is this percentage".
+///
+/// Both palettes live here so the menu bar ring, the panel bars, and the widget
+/// can't drift apart — they previously used custom RGB in SwiftUI and
+/// `NSColor.system*` in AppKit, which rendered as visibly different greens.
+enum Severity: CaseIterable {
+    case ok         // < 50%
+    case notice     // < 75%
+    case warning    // < 90%
+    case critical   // ≥ 90%
+
+    static func forPercent(_ pct: Double) -> Severity {
+        switch pct {
+        case ..<50: return .ok
+        case ..<75: return .notice
+        case ..<90: return .warning
+        default: return .critical
+        }
+    }
+
+    /// Red, green, blue in 0–1. One definition, two color types below.
+    var components: (r: Double, g: Double, b: Double) {
+        switch self {
+        case .ok:       return (0.22, 0.72, 0.45)
+        case .notice:   return (0.95, 0.77, 0.06)
+        case .warning:  return (0.96, 0.55, 0.14)
+        case .critical: return (0.91, 0.26, 0.21)
+        }
+    }
+
+    var color: Color {
+        let c = components
+        return Color(red: c.r, green: c.g, blue: c.b)
+    }
+
+    #if canImport(AppKit)
+    var nsColor: NSColor {
+        let c = components
+        return NSColor(srgbRed: c.r, green: c.g, blue: c.b, alpha: 1)
+    }
+    #endif
+}
+
+func severityColor(_ pct: Double) -> Color { Severity.forPercent(pct).color }
+
 // MARK: - Presentation helpers (shared)
 
 enum UsageFormat {
     static func percent(_ v: Double) -> String {
         String(format: "%.0f%%", v.rounded())
     }
+
+    /// Weekday + hour, in the user's locale — a 24-hour-clock user should not be
+    /// shown "Mon 6 PM". Built from a template so the field order is localized too.
+    private static let dayHourFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEE j")
+        return f
+    }()
 
     static func resetString(_ date: Date?) -> String {
         guard let date else { return "" }
@@ -81,9 +147,7 @@ enum UsageFormat {
             let m = (Int(interval) % 3600) / 60
             return h > 0 ? "resets in \(h)h \(m)m" : "resets in \(m)m"
         }
-        let f = DateFormatter()
-        f.dateFormat = "EEE h a"
-        return "resets \(f.string(from: date))"
+        return "resets \(dayHourFormatter.string(from: date))"
     }
 
     static func staleString(_ updated: Date) -> String {
@@ -91,14 +155,5 @@ enum UsageFormat {
         if mins < 2 { return "just now" }
         if mins < 60 { return "\(mins)m ago" }
         return "\(mins / 60)h ago"
-    }
-}
-
-func severityColor(_ pct: Double) -> Color {
-    switch pct {
-    case ..<50: return Color(red: 0.22, green: 0.72, blue: 0.45)
-    case ..<75: return Color(red: 0.95, green: 0.77, blue: 0.06)
-    case ..<90: return Color(red: 0.96, green: 0.55, blue: 0.14)
-    default: return Color(red: 0.91, green: 0.26, blue: 0.21)
     }
 }
