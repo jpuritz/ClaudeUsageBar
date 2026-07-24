@@ -60,6 +60,83 @@ final class UsageModel: ObservableObject {
         let subscription: String?
     }
 
+    // MARK: - claude.ai cookie mode
+
+    /// Matches a real browser. claude.ai sits behind Cloudflare; requests must
+    /// look like a browser AND come from a TLS stack Cloudflare accepts.
+    /// URLSession works here where curl and Python get a 403 challenge page —
+    /// so cookie mode deliberately never uses the curl fallback.
+    nonisolated static let browserUA =
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 " +
+        "(KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+
+    private static let orgIDKey = "ClaudeOrgID"
+    private static let planKey = "ClaudeOrgPlan"
+
+    /// claude.ai reports the plan as an org capability, e.g. ["claude_pro", "chat"].
+    nonisolated static func planLabel(from capabilities: [String]) -> String? {
+        if capabilities.contains("claude_max") { return "Max" }
+        if capabilities.contains("claude_pro") { return "Pro" }
+        if capabilities.contains("claude_team") { return "Team" }
+        if capabilities.contains("claude_enterprise") { return "Enterprise" }
+        return nil
+    }
+
+    nonisolated static func browserRequest(_ url: URL, cookie: String) -> URLRequest {
+        var req = URLRequest(url: url)
+        req.setValue(cookie, forHTTPHeaderField: "Cookie")
+        req.setValue(browserUA, forHTTPHeaderField: "User-Agent")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
+        req.setValue("https://claude.ai/settings/usage", forHTTPHeaderField: "Referer")
+        req.timeoutInterval = 25
+        return req
+    }
+
+    /// The cookie carries `lastActiveOrg`, so we can usually skip a lookup.
+    nonisolated static func orgID(fromCookie cookie: String) -> String? {
+        for piece in cookie.split(separator: ";") {
+            let kv = piece.trimmingCharacters(in: .whitespaces)
+            guard kv.hasPrefix("lastActiveOrg=") else { continue }
+            let raw = String(kv.dropFirst("lastActiveOrg=".count))
+            let value = raw.removingPercentEncoding ?? raw
+            if !value.isEmpty { return value }
+        }
+        return nil
+    }
+
+    /// Resolves (and caches) the organization UUID and plan label. Both are
+    /// cached in UserDefaults, so the extra lookup happens at most once — the
+    /// org alone is usually in the cookie, but the plan only comes from the API.
+    private func resolveOrgInfo(cookie: String) async -> (org: String, plan: String?)? {
+        let cachedOrg = UserDefaults.standard.string(forKey: Self.orgIDKey)
+        let cachedPlan = UserDefaults.standard.string(forKey: Self.planKey)
+        if let cachedOrg, !cachedOrg.isEmpty, cachedPlan != nil {
+            return (cachedOrg, cachedPlan)
+        }
+
+        // One lookup gets both the uuid and the plan capabilities.
+        let req = Self.browserRequest(URL(string: "https://claude.ai/api/organizations")!,
+                                      cookie: cookie)
+        if let (data, resp) = try? await URLSession.shared.data(for: req),
+           (resp as? HTTPURLResponse)?.statusCode == 200,
+           let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+           let org = arr.first {
+            let uuid = (org["uuid"] as? String) ?? cachedOrg ?? Self.orgID(fromCookie: cookie)
+            let plan = Self.planLabel(from: org["capabilities"] as? [String] ?? [])
+            if let uuid { UserDefaults.standard.set(uuid, forKey: Self.orgIDKey) }
+            if let plan { UserDefaults.standard.set(plan, forKey: Self.planKey) }
+            if let uuid { return (uuid, plan ?? cachedPlan) }
+        }
+
+        // Lookup failed — fall back to the org embedded in the cookie.
+        if let org = cachedOrg ?? Self.orgID(fromCookie: cookie), !org.isEmpty {
+            UserDefaults.standard.set(org, forKey: Self.orgIDKey)
+            return (org, cachedPlan)
+        }
+        return nil
+    }
+
     /// Picks the access token to use, minimizing reads of Claude Code's Keychain
     /// item. Priority:
     ///   1. A user-set long-lived token (`ClaudeUsage-token`).
@@ -157,6 +234,78 @@ final class UsageModel: ObservableObject {
     }
 
     private func fetch() async {
+        // Cookie mode takes priority: it reads only Keychain items this app owns,
+        // so it never triggers an authorization prompt.
+        if let cookie = await Task.detached(priority: .userInitiated, operation: {
+            KeychainReader.readCookie()
+        }).value {
+            await fetchViaCookie(cookie)
+            return
+        }
+        await fetchViaBearer()
+    }
+
+    /// claude.ai path — same limit fields as the OAuth endpoint, so the existing
+    /// parser handles the response unchanged.
+    private func fetchViaCookie(_ cookie: String) async {
+        guard let info = await resolveOrgInfo(cookie: cookie) else {
+            errorMessage = "Couldn't determine your organization from the saved cookie."
+            return
+        }
+        if let plan = info.plan { subscription = plan }
+        let url = URL(string: "https://claude.ai/api/organizations/\(info.org)/usage")!
+        let req = Self.browserRequest(url, cookie: cookie)
+
+        let data: Data, http: HTTPURLResponse
+        do {
+            let (d, resp) = try await URLSession.shared.data(for: req)
+            guard let h = resp as? HTTPURLResponse else { return }
+            data = d; http = h
+        } catch {
+            errorMessage = "Network error: \(error.localizedDescription)"
+            return
+        }
+
+        switch http.statusCode {
+        case 200:
+            let parsed = Self.parseLimits(from: data)
+            if parsed.isEmpty {
+                errorMessage = "Usage response had no limit data."
+            } else {
+                let previous = limits
+                limits = parsed
+                lastUpdated = Date()
+                errorMessage = nil
+                consecutive429s = 0
+                nextAttemptAllowed = .distantPast
+                AlertEngine.shared.evaluate(previous: previous, current: parsed)
+                publishToWidget(parsed)
+            }
+        case 401:
+            errorMessage = "claude.ai session expired — re-copy your Cookie (see README)."
+        case 403:
+            // Cloudflare serves an HTML challenge when cf_clearance goes stale.
+            let body = String(data: data.prefix(200), encoding: .utf8) ?? ""
+            errorMessage = body.contains("Just a moment")
+                ? "Cloudflare challenge — your cf_clearance cookie expired; re-copy your Cookie."
+                : "claude.ai refused the request (403)."
+            Self.appendLog("cookie mode HTTP 403")
+        case 429:
+            consecutive429s += 1
+            var delay = min(3600.0, 300.0 * pow(2, Double(consecutive429s - 1)))
+            if let ra = http.value(forHTTPHeaderField: "Retry-After"), let s = Double(ra) {
+                delay = max(delay, s)
+            }
+            nextAttemptAllowed = Date(timeIntervalSinceNow: delay)
+            let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none
+            errorMessage = "Rate limited — retrying after \(f.string(from: nextAttemptAllowed))."
+        default:
+            errorMessage = "claude.ai returned HTTP \(http.statusCode)."
+            Self.appendLog("cookie mode HTTP \(http.statusCode)")
+        }
+    }
+
+    private func fetchViaBearer() async {
         let accessToken: String
         var usingCustomToken = false
         do {

@@ -89,15 +89,21 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
     /// which makes its own fittingSize unhelpful).
     private func sizeToFitContent() {
         let width = window.contentView?.bounds.width ?? 300
-        let probe = NSHostingView(
+        // NSHostingController.sizeThatFits(in:) is the documented way to measure
+        // SwiftUI content against a width constraint. NSHostingView.fittingSize
+        // is unreliable on a view that isn't in a window hierarchy — it returned
+        // ~844pt for content that actually needs ~200.
+        let controller = NSHostingController(
             rootView: UsagePanelView(model: model, fixedWidth: nil, showsTitle: false)
-                .frame(width: width)
         )
-        let height = probe.fittingSize.height
-        guard height > 0 else { return }
-        // A little breathing room below the last row.
-        let maxH = (NSScreen.main?.visibleFrame.height ?? 900) - 40
-        let clamped = min(max(height + 18, window.minSize.height), maxH)
+        let measured = controller.sizeThatFits(
+            in: NSSize(width: width, height: .greatestFiniteMagnitude)
+        ).height
+        guard measured > 0 else { return }
+        // Hard ceiling: a bad measurement must never produce a full-screen window.
+        // 560 leaves room for far more limits than the API returns today.
+        let ceiling = min(560, (NSScreen.main?.visibleFrame.height ?? 900) - 80)
+        let clamped = min(max(measured + 18, window.minSize.height), ceiling)
         let topLeft = NSPoint(x: window.frame.minX, y: window.frame.maxY)
         window.setContentSize(NSSize(width: width, height: clamped))
         window.setFrameTopLeftPoint(topLeft)

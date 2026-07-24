@@ -186,10 +186,52 @@ This is what the published release contains.
 
 ## How it works
 
-The app reads the OAuth token that Claude Code stores in your login Keychain
-(`Claude Code-credentials`) and polls `api.anthropic.com/api/oauth/usage` — the
-same undocumented endpoint that powers Claude Code's `/usage` — every 30 seconds,
-with `Retry-After`-aware backoff on 429s.
+The app polls your usage every 30 seconds, with `Retry-After`-aware backoff on
+429s. It supports two authentication modes:
+
+### Mode 1 — Claude Code CLI (default, zero setup)
+
+Reads the OAuth token Claude Code stores in your login Keychain
+(`Claude Code-credentials`) and calls `api.anthropic.com/api/oauth/usage` — the
+same undocumented endpoint behind Claude Code's `/usage`. Nothing to configure,
+and it renews itself (see below).
+
+**The catch:** that Keychain item belongs to *another app*, so macOS gates each
+read with an authorization prompt — and the "Always Allow" grant is wiped every
+time the CLI rewrites the item, which happens on every token renewal (~8 hours).
+So you get a password prompt a few times a day, typically noticed after an
+overnight sleep. Nothing in this app can prevent that; it's macOS protecting
+another app's credential.
+
+### Mode 2 — claude.ai session cookie (no prompts)
+
+If you'd rather never see that prompt, store a claude.ai session cookie in a
+Keychain item this app **owns** — reading your own item never prompts.
+
+1. Open **claude.ai/settings/usage** while signed in.
+2. DevTools (⌘⌥I) → **Network** → refresh → click the **`usage`** request →
+   **Request Headers** → copy the whole **`Cookie:`** value.
+3. With that on your clipboard:
+
+   ```sh
+   security add-generic-password -U -s "ClaudeUsage-cookie" -a "claude-usage" -w "$(pbpaste)"
+   ```
+
+The app picks it up automatically and switches to
+`claude.ai/api/organizations/<org>/usage`, which returns the same limit fields.
+Your organization is read from the cookie's `lastActiveOrg` (falling back to a
+lookup). Remove it with
+`security delete-generic-password -s "ClaudeUsage-cookie"` to fall back to Mode 1.
+
+**Tradeoffs:** the cookie is broader than the usage-scoped OAuth token (it's full
+claude.ai session access), it's sent only to `claude.ai`, and it expires
+eventually — you'd repeat the paste every few weeks or months. In exchange: zero
+Keychain prompts.
+
+**Implementation note:** claude.ai sits behind Cloudflare, which serves a
+challenge page to non-browser clients. `URLSession` passes; `curl` and Python
+both get a 403. So cookie mode always uses `URLSession` and never the curl
+fallback.
 
 **Privacy.** It *reads* (never writes) that token and sends it to exactly one
 place: `api.anthropic.com`. The token is never logged, displayed, or sent to any

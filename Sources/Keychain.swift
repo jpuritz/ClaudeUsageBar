@@ -29,6 +29,22 @@ enum KeychainError: Error, LocalizedError {
 }
 
 enum KeychainReader {
+    /// Optional claude.ai session cookie, stored under "ClaudeUsage-cookie".
+    ///
+    /// When present this is preferred over the Claude Code credentials, because
+    /// it's an item this app OWNS — reading it never triggers an authorization
+    /// prompt. Reading Claude Code's item does, and that grant is wiped every
+    /// time the CLI renews the token (~every 8h), which is the whole reason this
+    /// mode exists.
+    static func readCookie() -> String? {
+        guard let data = readData(service: "ClaudeUsage-cookie"),
+              let s = String(data: data, encoding: .utf8)?
+                  .trimmingCharacters(in: .whitespacesAndNewlines),
+              !s.isEmpty
+        else { return nil }
+        return s
+    }
+
     /// Optional user-provided long-lived token, stored under "ClaudeUsage-token".
     static func readCustomToken() -> String? {
         guard let data = readData(service: "ClaudeUsage-token"),
