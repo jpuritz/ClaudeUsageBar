@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Claudar — radar for your Claude limits</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
   :root {
     --ink: #22211F;
@@ -46,7 +48,7 @@
     background: conic-gradient(from 0deg, transparent 0 295deg, rgba(61,123,82,.55) 360deg);
     animation: sweep 5s linear infinite;
   }
-  .radar .blip { position:absolute; width:4px; height:4px; border-radius:50%; background: var(--green); top: 5px; right: 6px; }
+  .radar .blip { position:absolute; width:4px; height:4px; border-radius:50%; background: #D97757; top: 5px; right: 6px; }
   .radar::after { content:""; position:absolute; left:50%; top:50%; width:3px; height:3px; margin:-1.5px 0 0 -1.5px; border-radius:50%; background: var(--green); }
   @keyframes sweep { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce){ .radar::before { animation: none; } }
@@ -71,9 +73,9 @@
   .fine b { color: var(--ink); font-weight: 600; }
 
   /* mock on radar grid */
-  .scope { position: relative; margin: 26px 0 0; padding: 44px 0 56px; }
+  .scope { position: relative; margin: 26px 0 0; padding: 88px 0 92px; }
   .scope-bg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-  .scope-bg svg { width: 560px; max-width: 100%; height: auto; opacity:.5; }
+  .scope-bg svg { width: 720px; max-width: 100%; height: auto; opacity:1; overflow:visible; }
   .shot-hero { position: relative; display:block; margin: 0 auto; width: 300px; max-width: 86%; height:auto;
     filter: drop-shadow(0 20px 38px rgba(40,38,33,.28)); }
   .scope-cap { position: relative; text-align:center; margin-top: 28px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); }
@@ -145,7 +147,8 @@
     .modes { gap: 26px; }
     .install-cols { gap: 26px; }
     .menu-list { columns: 1; }
-    .scope { padding: 30px 0 40px; }
+    .scope { padding: 62px 0 66px; }
+    .shot-hero { width: 240px; max-width: 72%; }
     .gallery { grid-template-columns: 1fr; gap: 30px; align-items: start; }
     .code-cta { flex-wrap: wrap; }
   }
@@ -193,16 +196,29 @@
 <div class="wrap">
   <div class="scope">
     <div class="scope-bg">
-      <svg viewBox="0 0 560 420" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <g stroke="#3D7B52" stroke-opacity="0.22">
-          <circle cx="280" cy="210" r="70"/>
-          <circle cx="280" cy="210" r="140"/>
-          <circle cx="280" cy="210" r="208"/>
-          <line x1="280" y1="2" x2="280" y2="418"/>
-          <line x1="72" y1="210" x2="488" y2="210"/>
+      <svg viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M360 360 L360 30 A330 330 0 0 1 613 148 Z" fill="#3D7B52" fill-opacity=".08"/>
+        <g stroke="#3D7B52" stroke-opacity=".42" stroke-width="1.5">
+          <circle cx="360" cy="360" r="110"/>
+          <circle cx="360" cy="360" r="220"/>
+          <circle cx="360" cy="360" r="330"/>
+          <line x1="360" y1="30" x2="360" y2="690"/>
+          <line x1="30" y1="360" x2="690" y2="360"/>
         </g>
-        <circle cx="362" cy="148" r="3.5" fill="#3D7B52" fill-opacity=".5"/>
-        <circle cx="196" cy="286" r="3" fill="#3D7B52" fill-opacity=".35"/>
+        <g transform="translate(624 162)" fill="#D97757">
+          <circle r="25" fill-opacity=".15"/>
+          <path d="M0-15 3-5 10-11 7-2 17 0 7 3 12 11 3 6 0 17-3 6-12 11-7 3-17 0-7-3-11-11-3-6Z"/>
+        </g>
+        <g transform="translate(84 540)">
+          <circle r="27" fill="#D97757" fill-opacity=".15"/>
+          <g fill="#D97757">
+            <rect x="-16" y="-11" width="32" height="24" rx="7"/>
+            <rect x="-1.5" y="-20" width="3" height="10" rx="1.5"/>
+            <circle cy="-21" r="3"/>
+          </g>
+          <g fill="#FAF9F6"><circle cx="-7" cy="1" r="3"/><circle cx="7" cy="1" r="3"/></g>
+        </g>
+        <circle cx="360" cy="360" r="4" fill="#3D7B52"/>
       </svg>
     </div>
     <img class="shot-hero" src="shot-menubar.png" width="522" height="746" alt="Claudar's menu bar dropdown: session, weekly, and extra usage meters with reset times, plus menu items like Refresh Now and Usage Window">
