@@ -63,7 +63,7 @@ Gatekeeper to trust it.)*
 
 | Widget | Menu bar | Window |
 |---|---|---|
-| ![widget](docs/widget.png) | ![menu bar](docs/menubar.png) | ![window](docs/window.png) |
+| ![widget](docs/shot-widget.png) | ![menu bar](docs/shot-menubar.png) | ![window](docs/shot-window.png) |
 
 ## Menu options
 
