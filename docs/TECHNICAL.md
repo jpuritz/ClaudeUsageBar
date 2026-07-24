@@ -48,6 +48,13 @@ this app **owns**, so reading it never prompts — and calls
 `claude.ai/api/organizations/<org>/usage`. That response carries the same limit
 fields (`five_hour`, `seven_day`, `extra_usage`, …), so the parser is shared.
 
+The cookie is obtained via an embedded `WKWebView` sign-in (menu → No-Prompt
+Mode → Sign In). The WebView is given the same `User-Agent` as the fetch, so the
+`cf_clearance` cookie it earns from Cloudflare stays valid for the later
+`URLSession` requests — cf_clearance is UA-bound, so a mismatch would 403.
+On success the app harvests all `claude.ai` cookies from the WebView's store and
+writes them to the Keychain. (A manual path via `set-cookie.command` also exists.)
+
 - The org UUID comes from the cookie's `lastActiveOrg`, with a
   `/api/organizations` lookup as fallback. Org and plan are cached in
   UserDefaults, so the extra lookup happens at most once.

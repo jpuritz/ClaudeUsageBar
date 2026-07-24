@@ -14,6 +14,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var cancellable: AnyCancellable?
     private var statusCancellable: AnyCancellable?
     private let menu = NSMenu()
+    private lazy var cookieSignIn = CookieSignInController(onSaved: { [weak self] in
+        self?.model.cookieDidChange()
+    })
 
     private static let windowVisibleKey = "ShowUsageWindow"
 
@@ -257,6 +260,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotkeyItem.toolTip = "Open the usage window from anywhere with \(HotkeyManager.comboDescription)."
         menu.addItem(hotkeyItem)
 
+        // No-Prompt Mode — sign in to claude.ai so usage reads never prompt.
+        let npMenu = NSMenu()
+        let npItem = NSMenuItem(title: "No-Prompt Mode", action: nil, keyEquivalent: "")
+        npItem.submenu = npMenu
+        if KeychainReader.readCookie() != nil {
+            let on = NSMenuItem(title: "On — signed in to claude.ai", action: nil, keyEquivalent: "")
+            on.state = .on
+            npMenu.addItem(on)
+            let re = NSMenuItem(title: "Re-sign In…", action: #selector(signInCookie), keyEquivalent: "")
+            re.target = self
+            npMenu.addItem(re)
+            let off = NSMenuItem(title: "Turn Off (use CLI sign-in)", action: #selector(turnOffCookie), keyEquivalent: "")
+            off.target = self
+            npMenu.addItem(off)
+        } else {
+            let on = NSMenuItem(title: "Sign In to claude.ai…", action: #selector(signInCookie), keyEquivalent: "")
+            on.target = self
+            npMenu.addItem(on)
+            let hint = NSMenuItem(title: "Stops the periodic password prompt", action: nil, keyEquivalent: "")
+            hint.isEnabled = false
+            npMenu.addItem(hint)
+        }
+        menu.addItem(npItem)
+
         let login = NSMenuItem(
             title: "Launch at Login",
             action: #selector(toggleLaunchAtLogin), keyEquivalent: ""
@@ -319,6 +346,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleHotkey() {
         Prefs.hotkeyEnabled.toggle()
         enableHotkey(Prefs.hotkeyEnabled)
+    }
+
+    @objc private func signInCookie() {
+        cookieSignIn.present()
+    }
+
+    @objc private func turnOffCookie() {
+        KeychainReader.clearCookie()
+        model.cookieDidChange()
     }
 
     private static func notifPref(_ key: String) -> Bool {

@@ -43,6 +43,16 @@ final class UsageModel: ObservableObject {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
+    /// Called when the saved claude.ai cookie is added or removed. A new cookie
+    /// may belong to a different org/account, so drop the cached org and plan and
+    /// re-fetch immediately.
+    func cookieDidChange() {
+        UserDefaults.standard.removeObject(forKey: Self.orgIDKey)
+        UserDefaults.standard.removeObject(forKey: Self.planKey)
+        subscription = nil
+        refresh(force: true)
+    }
+
     /// Refresh only if the data is older than `seconds` (used on menu close).
     func refreshIfStale(seconds: TimeInterval) {
         if let updated = lastUpdated, Date().timeIntervalSince(updated) < seconds { return }

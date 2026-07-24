@@ -56,6 +56,8 @@ Gatekeeper to trust it.)*
   warnings, and service up/down alerts. Each toggleable.
 - **Global shortcut** (⌘⇧U) opens the window from anywhere — no extra permissions.
 - **Configurable refresh** (15 s – 2 min), plus an instant refresh on wake.
+- **No-Prompt Mode** — sign in to claude.ai once to stop the periodic macOS
+  password prompt (see [below](#sign-in-and-the-password-prompt)).
 
 ## Screenshots
 
@@ -72,6 +74,7 @@ Gatekeeper to trust it.)*
 - **Notifications** — thresholds, resets, pace warnings, service alerts
 - **Refresh Interval** — 15 s / 30 s / 1 min / 2 min
 - **Global Shortcut (⌘⇧U)** — off by default
+- **No-Prompt Mode** — sign in to claude.ai to stop the password prompt
 - **Launch at Login**
 - **Quit**
 
@@ -83,26 +86,32 @@ for your password to authorize it, and that authorization gets reset each time
 the CLI refreshes its token (a few times a day). So the prompt comes back
 periodically. This is macOS protecting the CLI's credential, not a bug.
 
-**To never see that prompt,** switch to a claude.ai session cookie stored in a
-Keychain item the app owns. The easiest way:
+**To never see that prompt,** turn on **No-Prompt Mode**, which signs in to
+claude.ai and stores the session in a Keychain item the app owns:
 
-```sh
-# from a copy of this repo
-./set-cookie.command
-```
+> Menu → **No-Prompt Mode** → **Sign In to claude.ai…**
 
-That opens the right page, walks you through copying your cookie, and saves it.
-Prefer to do it by hand? Copy the `Cookie:` header from claude.ai's DevTools
-(Network tab → the `usage` request) and run:
+A sign-in window opens; log in once and you're done — no DevTools, no terminal.
+The app switches over automatically and you can **Turn Off** any time from the
+same menu to go back to CLI mode.
+
+The claude.ai session is broader than the CLI token (full session access, sent
+only to claude.ai) and expires every few weeks, at which point you sign in again.
+
+<details>
+<summary>Prefer to set the cookie by hand?</summary>
+
+Run `./set-cookie.command` from a copy of this repo (it guides you through
+copying the Cookie header), or do it directly: copy the `Cookie:` header from
+claude.ai's DevTools (Network tab → the `usage` request) and run
 
 ```sh
 security add-generic-password -U -s "ClaudeUsage-cookie" -a "claude-usage" -w "$(pbpaste)"
 ```
 
-The app switches over automatically. The cookie is full claude.ai session access
-(broader than the CLI token) and expires every few weeks, so you re-run it
-occasionally. To go back to CLI mode:
-`security delete-generic-password -s "ClaudeUsage-cookie"`.
+Remove it with `security delete-generic-password -s "ClaudeUsage-cookie"`.
+
+</details>
 
 Full details on both modes are in [docs/TECHNICAL.md](docs/TECHNICAL.md#how-it-fetches-usage).
 

@@ -45,6 +45,19 @@ enum KeychainReader {
         return s
     }
 
+    /// Saves a claude.ai Cookie header (written by the embedded sign-in).
+    static func writeCookie(_ header: String) {
+        guard let data = header.data(using: .utf8) else { return }
+        writeData(data, service: "ClaudeUsage-cookie")
+    }
+
+    static func clearCookie() {
+        SecItemDelete([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "ClaudeUsage-cookie",
+        ] as CFDictionary)
+    }
+
     /// Optional user-provided long-lived token, stored under "ClaudeUsage-token".
     static func readCustomToken() -> String? {
         guard let data = readData(service: "ClaudeUsage-token"),
