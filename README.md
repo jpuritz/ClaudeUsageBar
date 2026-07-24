@@ -54,7 +54,7 @@ Gatekeeper to trust it.)*
   ring when claude.ai, the API, Claude Code, or the Console has an incident.
 - **Notifications** — 80% / 95% thresholds, reset alerts, "on pace to run out"
   warnings, and service up/down alerts. Each toggleable.
-- **Global shortcut** (⌘⇧U) opens the window from anywhere — no extra permissions.
+- **Global shortcut** (⌘⇧C) opens the window from anywhere — no extra permissions.
 - **Configurable refresh** (15 s – 2 min), plus an instant refresh on wake.
 - **No-Prompt Mode** — sign in to claude.ai once to stop the periodic macOS
   password prompt (see [below](#sign-in-and-the-password-prompt)).
@@ -73,7 +73,7 @@ Gatekeeper to trust it.)*
 - **Keep Window on Top**
 - **Notifications** — thresholds, resets, pace warnings, service alerts
 - **Refresh Interval** — 15 s / 30 s / 1 min / 2 min
-- **Global Shortcut (⌘⇧U)** — off by default
+- **Global Shortcut (⌘⇧C)** — off by default
 - **No-Prompt Mode** — sign in to claude.ai to stop the password prompt
 - **Launch at Login**
 - **Quit**

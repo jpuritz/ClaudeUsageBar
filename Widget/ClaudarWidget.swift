@@ -136,13 +136,20 @@ struct MediumUsageView: View {
     var body: some View {
         if let headline = snapshot.headline {
             HStack(spacing: 14) {
-                VStack(spacing: 4) {
+                VStack(spacing: 3) {
                     UsageRing(value: headline.utilization, lineWidth: 9)
                         .frame(width: 72, height: 72)
                     Text(headline.label)
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                    if headline.resetsAt != nil {
+                        Text(UsageFormat.resetString(headline.resetsAt))
+                            .font(.system(size: 8))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
                 }
                 VStack(alignment: .leading, spacing: 7) {
                     ForEach(snapshot.limits.prefix(4)) { limit in

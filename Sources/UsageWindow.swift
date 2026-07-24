@@ -37,7 +37,9 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.backgroundColor = .windowBackgroundColor
-        window.minSize = NSSize(width: 260, height: 180)
+        // Low floor: the computed fit is the real driver, and a tall floor would
+        // silently pad the window when there are few limits.
+        window.minSize = NSSize(width: 260, height: 120)
         window.contentView = NSHostingView(
             rootView: UsagePanelView(model: model, fixedWidth: nil, showsTitle: false)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -66,6 +68,11 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
                     } else {
                         self.window.title = "Claudar"
                     }
+                    // If the window was opened before the first fetch landed, the
+                    // row count just changed — re-fit unless the user has sized it.
+                    if !self.hasUserFrame, self.window.isVisible {
+                        self.sizeToFitContent()
+                    }
                 }
             }
     }
@@ -83,27 +90,46 @@ final class UsageWindowController: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
-    /// Sizes the window's height to exactly wrap the current content, keeping the
-    /// top-left corner fixed. Measured with a throwaway hosting view at the
-    /// current width (the live content view is pinned top for resize behavior,
-    /// which makes its own fittingSize unhelpful).
+    /// Sizes the window's height to wrap the current content, keeping the
+    /// top-left corner fixed.
+    ///
+    /// The height is computed from the content rather than measured. Both
+    /// `NSHostingView.fittingSize` and `NSHostingController.sizeThatFits` over-
+    /// report badly for this layout (fittingSize returned ~844pt, and
+    /// sizeThatFits still came back far too tall), because the panel is pinned
+    /// to the top with a flexible frame for resize behavior. The layout is
+    /// simple and fixed-metric, so adding it up is both accurate and stable.
     private func sizeToFitContent() {
         let width = window.contentView?.bounds.width ?? 300
-        // NSHostingController.sizeThatFits(in:) is the documented way to measure
-        // SwiftUI content against a width constraint. NSHostingView.fittingSize
-        // is unreliable on a view that isn't in a window hierarchy — it returned
-        // ~844pt for content that actually needs ~200.
-        let controller = NSHostingController(
-            rootView: UsagePanelView(model: model, fixedWidth: nil, showsTitle: false)
-        )
-        let measured = controller.sizeThatFits(
-            in: NSSize(width: width, height: .greatestFiniteMagnitude)
-        ).height
-        guard measured > 0 else { return }
-        // Hard ceiling: a bad measurement must never produce a full-screen window.
-        // 560 leaves room for far more limits than the API returns today.
+
+        // Mirrors UsagePanelView: 14pt padding, 10pt VStack spacing, and per-row
+        // metrics from LimitRow (12pt label, 6pt bar, optional 10pt reset line,
+        // 3pt internal spacing).
+        let padding: CGFloat = 14 * 2
+        let stackSpacing: CGFloat = 10
+        var blocks: [CGFloat] = []
+
+        if model.limits.isEmpty && model.errorMessage == nil {
+            blocks.append(16)                       // "Loading…"
+        }
+        for limit in model.limits {
+            // label(16) + 3 + bar(6) [+ 3 + reset(13)]
+            blocks.append(limit.resetsAt != nil ? 41 : 25)
+        }
+        if model.errorMessage != nil {
+            blocks.append(30)                       // error text, may wrap to 2 lines
+        }
+        blocks.append(18)                           // footer: "Updated …" + plan badge
+
+        let content = blocks.reduce(0, +)
+            + stackSpacing * CGFloat(max(0, blocks.count - 1))
+        // A little breathing room below the last row.
+        let desired = padding + content + 12
+
+        // Guard rails: never smaller than minSize, never a full-screen window.
         let ceiling = min(560, (NSScreen.main?.visibleFrame.height ?? 900) - 80)
-        let clamped = min(max(measured + 18, window.minSize.height), ceiling)
+        let clamped = min(max(desired, window.minSize.height), ceiling)
+
         let topLeft = NSPoint(x: window.frame.minX, y: window.frame.maxY)
         window.setContentSize(NSSize(width: width, height: clamped))
         window.setFrameTopLeftPoint(topLeft)

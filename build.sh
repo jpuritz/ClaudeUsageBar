@@ -25,18 +25,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Info.plist "$APP/Contents/Info.plist"
 cp build/Claudar "$APP/Contents/MacOS/Claudar"
 
-# Icon: regenerate if the master or icns is missing.
-if [ ! -f build/AppIcon.icns ]; then
-    swift tools/gen_icon.swift build/icon_1024.png
-    rm -rf build/AppIcon.iconset && mkdir build/AppIcon.iconset
-    for s in 16 32 128 256 512; do
-        sips -z $s $s build/icon_1024.png --out "build/AppIcon.iconset/icon_${s}x${s}.png" >/dev/null
-        d=$((s*2))
-        sips -z $d $d build/icon_1024.png --out "build/AppIcon.iconset/icon_${s}x${s}@2x.png" >/dev/null
-    done
-    iconutil -c icns build/AppIcon.iconset -o build/AppIcon.icns
-fi
-cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# Icon: committed at Resources/AppIcon.icns, built from the masters in design/
+# (see design/README.md to regenerate).
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 echo "Signing (ad-hoc)…"
 codesign --force --sign - "$APP"

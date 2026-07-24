@@ -18,12 +18,12 @@ final class HotkeyManager {
     private var handler: EventHandlerRef?
     private var action: (() -> Void)?
 
-    // ⌘⇧U
-    private let keyCode = UInt32(kVK_ANSI_U)
+    // ⌘⇧C
+    private let keyCode = UInt32(kVK_ANSI_C)
     private let modifiers = UInt32(cmdKey | shiftKey)
     private let hotKeyID = EventHotKeyID(signature: OSType(0x43555347 /* "CUSG" */), id: 1)
 
-    static let comboDescription = "⌘⇧U"
+    static let comboDescription = "⌘⇧C"
 
     var isEnabled: Bool { hotKeyRef != nil }
 
